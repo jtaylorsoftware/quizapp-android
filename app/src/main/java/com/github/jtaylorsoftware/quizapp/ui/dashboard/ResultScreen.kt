@@ -79,7 +79,7 @@ private fun GradedFillInQuestion(
 ) {
     Box {
         Column {
-            Text("$index. ${question.text}")
+            Text("${index + 1}. ${question.text}")
             Row {
                 if (gradedAnswer.isCorrect) {
                     Icon(Icons.Default.Check, "Correct answer")
@@ -100,11 +100,11 @@ private fun GradedMultipleChoiceQuestion(
 ) {
     Box {
         Column {
-            Text("$index. ${question.text}")
+            Text("${index + 1}. ${question.text}")
             question.answers.forEachIndexed { index, answer ->
                 GradedMultipleChoiceAnswer(
                     index,
-                    answer,
+                    answer.text,
                     gradedAnswer.choice == index,
                     gradedAnswer.isCorrect && index == gradedAnswer.choice
                 )
@@ -116,9 +116,16 @@ private fun GradedMultipleChoiceQuestion(
 @Composable
 private fun GradedMultipleChoiceAnswer(
     index: Int,
-    answer: Question.MultipleChoice.Answer,
+    text: String,
     isChoice: Boolean,
     isCorrect: Boolean,
 ) {
-
+    Row {
+        if (isCorrect) {
+            Icon(Icons.Default.Check, "Correct answer")
+        } else if (isChoice) {
+            Icon(Icons.Default.Close, "Incorrect answer")
+        }
+        Text("${index + 1}. $text")
+    }
 }
