@@ -16,6 +16,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.github.jtaylorsoftware.quizapp.data.*
 
+/**
+ * Displays the signed-in user's list of results for their created quizzes, in [QuizResultListing] format.
+ *
+ * @param results The list of the user's result listings.
+ * @param navigateToDetails Callback invoked when the user presses "Details" on a listing.
+ *                          It accepts the id of the selected listing.
+ */
 @Composable
 fun ResultScreen(results: List<QuizResultListing>, navigateToDetails: (String) -> Unit) {
     LazyColumn {
@@ -25,14 +32,21 @@ fun ResultScreen(results: List<QuizResultListing>, navigateToDetails: (String) -
         }
 
         items(results, key = { it.id }) { result ->
-            ResultListItem(result, navigateToDetails)
+            ResultListItem(result, navigateToDetails = { navigateToDetails(result.id) })
         }
     }
 }
 
+/**
+ * Displays the data for one [QuizResultListing] to a [Quiz] created by the signed-in user,
+ * and a button to view the full details of the result.
+ *
+ * @param result The listing to display.
+ * @param navigateToDetails Callback invoked to navigate to the details of [result].
+ */
 @Composable
-private fun ResultListItem(result: QuizResultListing, navigateToDetails: (String) -> Unit) {
-    Box(modifier = Modifier.clickable { navigateToDetails(result.id) }) {
+private fun ResultListItem(result: QuizResultListing, navigateToDetails: () -> Unit) {
+    Box(modifier = Modifier.clickable { navigateToDetails() }) {
         Column {
             Text("\"${result.quizTitle}\"")
             Text("by ${result.createdBy}")
@@ -41,6 +55,13 @@ private fun ResultListItem(result: QuizResultListing, navigateToDetails: (String
     }
 }
 
+/**
+ * Displays all the [graded answers][GradedAnswer] and overall score for the user's
+ * response to a Question. It uses a [QuizForm] to supply the context for the user's [result].
+ *
+ * @param result The user's graded answers and score for their responses to a Quiz.
+ * @param form The Quiz, [as a form][QuizForm], to use to supply context, such as [Question] text.
+ */
 @Composable
 fun ResultDetail(result: QuizResult, form: QuizForm) {
     LazyColumn {
@@ -57,6 +78,13 @@ fun ResultDetail(result: QuizResult, form: QuizForm) {
     }
 }
 
+/**
+ * Displays one [Question] with its graded answer.
+ *
+ * @param index Index of the [Question].
+ * @param question The [Question] to display. It should be the same type as [gradedAnswer].
+ * @param gradedAnswer The [user's graded answer to the Question][GradedAnswer].
+ */
 @Composable
 private fun GradedQuestion(index: Int, question: Question, gradedAnswer: GradedAnswer) {
     when (question) {
@@ -71,6 +99,13 @@ private fun GradedQuestion(index: Int, question: Question, gradedAnswer: GradedA
     }
 }
 
+/**
+ * Displays one [Fill-in-the-Blank Question][Question.FillIn] with its graded answer.
+ *
+ * @param index Index of the [Question].
+ * @param question The [fill-in Question][Question.FillIn] to display.
+ * @param gradedAnswer The [user's graded answer to the Question][GradedAnswer.FillIn].
+ */
 @Composable
 private fun GradedFillInQuestion(
     index: Int,
@@ -92,6 +127,14 @@ private fun GradedFillInQuestion(
     }
 }
 
+/**
+ * Displays one [Multiple Choice Question][Question.MultipleChoice] with its graded answers.
+ *
+ * @param index Index of the [Question].
+ * @param question The [multiple choice Question][Question.MultipleChoice] to display. It should have
+ *                 the correct number of answer choices for the given [gradedAnswer].
+ * @param gradedAnswer The [user's graded answer to the Question][GradedAnswer.MultipleChoice].
+ */
 @Composable
 private fun GradedMultipleChoiceQuestion(
     index: Int,
@@ -113,6 +156,14 @@ private fun GradedMultipleChoiceQuestion(
     }
 }
 
+/**
+ * Displays the text of a MultipleChoice [Question] answer with an Icon indicating if the user's choice is correct or incorrect.
+ *
+ * @param index Index of the answer.
+ * @param text Text of the answer.
+ * @param isChoice Flag indicating if this answer is the one the user had picked.
+ * @param isCorrect Flag indicating if this answer is the correct one for the question.
+ */
 @Composable
 private fun GradedMultipleChoiceAnswer(
     index: Int,

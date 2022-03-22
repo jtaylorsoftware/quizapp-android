@@ -12,6 +12,19 @@ import com.github.jtaylorsoftware.quizapp.ui.components.EmailField
 import com.github.jtaylorsoftware.quizapp.ui.components.PasswordField
 import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
 
+/**
+ * ProfileScreen displays a user's information and provides forms to update
+ * their profile data.
+ *
+ * @param email The user's current email before any changes.
+ * @param emailState State containing any changes to the email.
+ * @param onChangeEmail Callback invoked when user inputs text in the form.
+ * @param passwordState The state for the to-be-submitted password that can be error checked
+ *                      according to business logic.
+ * @param onChangePassword Callback invoked when the first password input changes.
+ * @param onSubmitPassword Callback invoked when the user presses "Submit" in the Password form.
+ * @param onSubmitEmail Callback invoked when the user presses "Submit" in the Email form.
+ */
 @Composable
 fun ProfileScreen(
     email: String,
@@ -30,6 +43,14 @@ fun ProfileScreen(
     }
 }
 
+/**
+ * Displays the user's current email, with a button to open a form to change the email.
+ *
+ * @param email The user's current email before any changes.
+ * @param emailState State containing any changes to the email.
+ * @param onChangeEmail Callback invoked when user inputs text in the form.
+ * @param onSubmitEmail Callback invoked when user wants to submit their changes.
+ */
 @Composable
 private fun EmailForm(
     email: String,

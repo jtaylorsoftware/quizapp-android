@@ -26,6 +26,17 @@ import com.github.jtaylorsoftware.quizapp.util.isInPast
 import com.github.jtaylorsoftware.quizapp.util.periodBetweenNow
 import java.time.Instant
 
+/**
+ * Displays the signed-in user's list of created quizzes, in [QuizListing] format.
+ *
+ * @param quizzes The user's QuizListings.
+ * @param onDeleteQuiz Callback invoked when the user presses "Delete" on a QuizListing. It should
+ *                     accept the `id` of the Quiz to be deleted.
+ * @param navigateToEditor Callback invoked when the user presses "Edit" on a QuizListing. It should
+ *                         accept the `id` of the Quiz to be edited.
+ * @param navigateToResults Callback invoked when the user presses "View Results" on a QuizListing. It should
+ *                          accept the `id` of the Quiz to view the results of.
+ */
 @Composable
 fun QuizScreen(
     quizzes: List<QuizListing>,
@@ -44,6 +55,15 @@ fun QuizScreen(
     }
 }
 
+/**
+ * Displays the data for one one [QuizListing] and provides buttons for the user
+ * to edit, delete, or view the results of the Quiz that the QuizListing is for.
+ *
+ * @param quiz The listing to display.
+ * @param onDeleteQuiz Callback invoked when the user presses the "Delete" button.
+ * @param navigateToEditor Callback invoked when the user presses the "Edit" button.
+ * @param navigateToResults Callback invoked when the user presses the "View Results" button.
+ */
 @Composable
 private fun QuizListItem(
     quiz: QuizListing,
@@ -86,6 +106,12 @@ private fun QuizListItem(
     }
 }
 
+/**
+ * Displays a timestamp in the form of "Created N D/M/Y ago"
+ * depending on how long ago the timestamp is.
+ *
+ * @param date The timestamp to check, as an Instant.
+ */
 @Composable
 private fun CreationTimestamp(date: Instant) {
     val timestamp: String by remember {
@@ -97,6 +123,11 @@ private fun CreationTimestamp(date: Instant) {
     Text("Created $timestamp")
 }
 
+/**
+ * Displays text containing "Expired" if the given Instant can be considered expired.
+ *
+ * @param expiration The timestamp to check, as an Instant.
+ */
 @Composable
 private fun Expiration(expiration: Instant) {
     val expired: Boolean by remember { derivedStateOf { expiration.isInPast() } }
@@ -105,6 +136,13 @@ private fun Expiration(expiration: Instant) {
     }
 }
 
+/**
+ * Computes and remembers the correct form of a noun and returns it with the first letter capitalized.
+ *
+ * @param count The number of the noun that exists.
+ * @param singular The singular form of the noun.
+ * @param plural The plural form of the noun.
+ */
 @Composable
 private fun rememberCapitalizedNoun(count: Int, singular: String, plural: String): String {
     val noun: String by remember { derivedStateOf { if (count == 1) singular else plural } }
