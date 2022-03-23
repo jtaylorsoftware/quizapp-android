@@ -210,9 +210,8 @@ class QuizEditorScreenTest {
         }
 
         // Verify it exists and can be clicked
-//        composeTestRule.onNodeWithContentDescription("Edit expiration").assertHasClickAction()
-
-        // TODO - Can test the datepicker?
+        composeTestRule.onNodeWithContentDescription("Change expiration date").assertHasClickAction()
+        composeTestRule.onNodeWithContentDescription("Change expiration time").assertHasClickAction()
     }
 
     @Test
@@ -232,9 +231,8 @@ class QuizEditorScreenTest {
         }
 
         // Verify it exists and can be clicked
-//        composeTestRule.onNodeWithContentDescription("Edit expiration").assertHasClickAction()
-
-        // TODO - Can test the datepicker?
+        composeTestRule.onNodeWithContentDescription("Change expiration date").assertHasClickAction()
+        composeTestRule.onNodeWithContentDescription("Change expiration time").assertHasClickAction()
     }
 
     @Test

@@ -264,13 +264,17 @@ private fun Expiration(
     }
     Row {
         Text("Date:")
-        OutlinedButton(onClick = { datePickerOpen = true }) {
+        OutlinedButton(onClick = { datePickerOpen = true }, modifier = Modifier.semantics {
+            contentDescription = "Change expiration date"
+        }) {
             Text(text = expirationDateStr)
         }
     }
     Row {
         Text("Time:")
-        OutlinedButton(onClick = { timePickerOpen = true }) {
+        OutlinedButton(onClick = { timePickerOpen = true }, modifier = Modifier.semantics {
+            contentDescription = "Change expiration time"
+        }) {
             Text(text = expirationTimeStr)
         }
     }
