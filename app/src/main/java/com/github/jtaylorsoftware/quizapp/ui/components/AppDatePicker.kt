@@ -12,10 +12,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
-import java.time.DateTimeException
-import java.time.LocalDate
-import java.time.Month
-import java.time.Year
+import java.time.*
 import java.time.format.TextStyle
 import java.util.*
 
@@ -34,26 +31,34 @@ import java.util.*
  * Year button's `contentDescription` is `"Select year"`. Year items use [Text] with just the year value.
  *
  * @param defaultValue The default [LocalDate] to use.
- * @param onDateChange Callback invoked when the user selects any value, passing in a LocalDate by combining all selections.
  * @param minYear The minimum year to offer as a selection. Defaults to current year.
  * @param maxYear The maximum year to offer as a selection. Defaults to current year + 10.
  * @param open Flag controlling visibility of the dialog.
- * @param onDismiss Callback invoked when the user clicks outside the dialog. Should usually just set [open] to false.
+ * @param onDismiss Callback invoked when the user clicks outside the dialog. Receives the current input
+ *                  as its argument.
  */
 @Composable
 fun AppDatePicker(
     defaultValue: LocalDate,
-    onDateChange: (LocalDate) -> Unit,
     minYear: Int = Year.now().value,
     maxYear: Int = minYear + 10,
     open: Boolean,
-    onDismiss: () -> Unit,
+    onDismiss: (LocalDate) -> Unit,
 ) {
+    var localValue: LocalDate by remember {
+        mutableStateOf(
+            LocalDate.of(
+                defaultValue.year,
+                defaultValue.month,
+                defaultValue.dayOfMonth
+            )
+        )
+    }
     if (open) {
-        Dialog(onDismissRequest = onDismiss) {
+        Dialog(onDismissRequest = { onDismiss(localValue) }) {
             AppDatePickerContent(
-                defaultValue = defaultValue,
-                onDateChange = onDateChange,
+                value = defaultValue,
+                onDateChange = { localValue = it },
                 minYear = minYear,
                 maxYear = maxYear
             )
@@ -66,14 +71,14 @@ fun AppDatePicker(
  */
 @Composable
 private fun AppDatePickerContent(
-    defaultValue: LocalDate,
+    value: LocalDate,
     onDateChange: (LocalDate) -> Unit,
     minYear: Int,
     maxYear: Int,
 ) {
-    var month: Month by remember { mutableStateOf(defaultValue.month) }
-    var year: Int by remember { mutableStateOf(defaultValue.year) }
-    var day: Int by remember { mutableStateOf(defaultValue.dayOfMonth) }
+    var month: Month by remember { mutableStateOf(value.month) }
+    var year: Int by remember { mutableStateOf(value.year) }
+    var day: Int by remember { mutableStateOf(value.dayOfMonth) }
 
     fun adjustDate(newYear: Int = year, newMonth: Month = month, newDay: Int = day) {
         try {
@@ -133,7 +138,7 @@ private fun AppDatePickerContentPreview() {
     val year = Year.now().value
     QuizAppTheme {
         AppDatePickerContent(
-            defaultValue = LocalDate.now(),
+            value = LocalDate.now(),
             onDateChange = {},
             minYear = year,
             maxYear = year + 10

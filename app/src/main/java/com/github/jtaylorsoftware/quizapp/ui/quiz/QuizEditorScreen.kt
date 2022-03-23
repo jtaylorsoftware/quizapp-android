@@ -9,7 +9,7 @@ import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -21,9 +21,13 @@ import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.R
 import com.github.jtaylorsoftware.quizapp.data.Question
 import com.github.jtaylorsoftware.quizapp.data.Quiz
+import com.github.jtaylorsoftware.quizapp.ui.components.AppDatePicker
+import com.github.jtaylorsoftware.quizapp.ui.components.AppTimePicker
 import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
-import java.time.Instant
+import java.time.*
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 /**
  * Displays a form for a user to create or edit a [Quiz]. The mode
@@ -242,8 +246,53 @@ private fun Expiration(
     changeExpiration: (Instant) -> Unit,
     expirationError: String?
 ) {
+    val expirationDateTime: LocalDateTime =
+        remember(expiration) { expiration.atZone(ZoneId.systemDefault()).toLocalDateTime() }
+    val expirationDateStr: String by derivedStateOf {
+        expirationDateTime.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG))
+    }
+    val expirationTimeStr: String by derivedStateOf {
+        expirationDateTime.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+    }
+
+    var datePickerOpen: Boolean by remember { mutableStateOf(false) }
+    var timePickerOpen: Boolean by remember { mutableStateOf(false) }
+
     Text("Expiration:")
-    // TODO
+    expirationError?.let {
+        Text("Error: $it", color = MaterialTheme.colors.error)
+    }
+    Row {
+        Text("Date:")
+        OutlinedButton(onClick = { datePickerOpen = true }) {
+            Text(text = expirationDateStr)
+        }
+    }
+    Row {
+        Text("Time:")
+        OutlinedButton(onClick = { timePickerOpen = true }) {
+            Text(text = expirationTimeStr)
+        }
+    }
+
+    AppDatePicker(
+        defaultValue = expirationDateTime.toLocalDate(),
+        open = datePickerOpen,
+        onDismiss = {
+            datePickerOpen = false
+            changeExpiration(
+                LocalDateTime.of(it, expirationDateTime.toLocalTime())
+                    .atZone(ZoneId.systemDefault()).toInstant()
+            )
+        })
+
+    AppTimePicker(value = expirationDateTime.toLocalTime(), open = timePickerOpen, onDismiss = {
+        timePickerOpen = false
+        changeExpiration(
+            LocalDateTime.of(expirationDateTime.toLocalDate(), it).atZone(ZoneId.systemDefault())
+                .toInstant()
+        )
+    })
 }
 
 /**
