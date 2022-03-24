@@ -1,21 +1,30 @@
 package com.github.jtaylorsoftware.quizapp.ui.quiz
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.R
@@ -25,7 +34,10 @@ import com.github.jtaylorsoftware.quizapp.ui.components.AppDatePicker
 import com.github.jtaylorsoftware.quizapp.ui.components.AppTimePicker
 import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
-import java.time.*
+import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
@@ -38,13 +50,14 @@ import java.time.format.FormatStyle
  * @param quizState The basic data for a Quiz, such as the expiration and title.
  * @param questions The questions in the Quiz.
  * @param onChangeQuizState Called when modifying one or more properties of [quizState].
- * @param onAddQuestion Callback invoked to add a [new question][QuestionState.Empty] to the Quiz.
- * @param onChangeQuestionType Called to change the type of a question to something other than [Empty][QuestionState.Empty].
+ * @param onAddQuestion Callback invoked to add a [new question][QuestionState.Empty()] to the Quiz.
+ * @param onChangeQuestionType Called to change the type of a question to something other than [Empty][QuestionState.Empty()].
  * @param onEditQuestion Function invoked to modify Question prompt or its answers.
  * @param onDeleteQuestion Called when deleting a specific Question.
  * @param onSubmit Called when submitting the Quiz.
  * @param isEditing Flag controlling mutability of the current Quiz.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun QuizEditorScreen(
     quizState: QuizState,
@@ -57,22 +70,56 @@ fun QuizEditorScreen(
     onSubmit: () -> Unit,
     isEditing: Boolean = false,
 ) {
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
     Scaffold(
         floatingActionButton = {
-            Column {
-                FloatingActionButton(onClick = onSubmit) {
+            val focusManager = LocalFocusManager.current
+            val keyboardController = LocalSoftwareKeyboardController.current
+            Column(Modifier
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    })
+                }
+            ) {
+                FloatingActionButton(onClick = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                    onSubmit()
+                }) {
                     Icon(painter = painterResource(R.drawable.ic_publish_24), "Upload quiz")
                 }
                 if (!isEditing) {
                     Spacer(Modifier.requiredHeight(8.dp))
-                    FloatingActionButton(onClick = onAddQuestion) {
+                    FloatingActionButton(onClick = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                        coroutineScope.launch {
+                            listState.scrollToItem(listState.layoutInfo.totalItemsCount)
+                        }
+                        onAddQuestion()
+                    }) {
                         Icon(Icons.Default.Add, "Add question")
                     }
                 }
             }
         }
     ) {
-        LazyColumn(Modifier.fillMaxWidth()) {
+        val focusManager = LocalFocusManager.current
+        val keyboardController = LocalSoftwareKeyboardController.current
+
+        LazyColumn(state = listState, modifier = Modifier
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                })
+            }
+            .fillMaxWidth()
+        ) {
             // Basic Quiz data
             item {
                 QuizHeader(quizState = quizState, onChangeQuizState = onChangeQuizState)
@@ -88,7 +135,11 @@ fun QuizEditorScreen(
                 Row {
                     Text("Question ${index + 1}:")
                     if (!isEditing) {
-                        IconButton(onClick = { onDeleteQuestion(index) }) {
+                        IconButton(onClick = {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                            onDeleteQuestion(index)
+                        }) {
                             Icon(Icons.Default.Delete, "Delete question")
                         }
                     }
@@ -132,7 +183,7 @@ fun QuizEditorScreenPreview() {
                 answerErrors = listOf(null, null)
             )
             is Question.FillIn -> QuestionState.FillIn(question = it)
-            else -> QuestionState.Empty
+            else -> QuestionState.Empty()
         }
     }
 
@@ -183,8 +234,10 @@ private fun QuizHeader(quizState: QuizState, onChangeQuizState: (QuizState) -> U
 /**
  * Renders editable Quiz title field.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun QuizTitle(title: TextFieldState, onTitleChange: (String) -> Unit) {
+    val keyboardController = LocalSoftwareKeyboardController.current
     TextField(
         value = title.text,
         onValueChange = onTitleChange,
@@ -194,7 +247,9 @@ private fun QuizTitle(title: TextFieldState, onTitleChange: (String) -> Unit) {
         },
         modifier = Modifier.semantics {
             contentDescription = "Edit quiz title"
-        }
+        },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
     )
     title.error?.let {
         Text(it, modifier = Modifier.semantics {
@@ -206,6 +261,7 @@ private fun QuizTitle(title: TextFieldState, onTitleChange: (String) -> Unit) {
 /**
  * Shows editable allowedUsers text field.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun AllowedUsers(
     isPublic: Boolean,
@@ -214,6 +270,7 @@ private fun AllowedUsers(
     onChangeAllowedUsers: (String) -> Unit,
     allowedUsersError: String?,
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
     Row {
         Text("Public Quiz?")
         Switch(
@@ -224,11 +281,19 @@ private fun AllowedUsers(
             })
     }
     if (!isPublic) {
-        TextField(value = allowedUsers, onValueChange = onChangeAllowedUsers, label = {
-            Text("Allowed Users")
-        }, modifier = Modifier.semantics {
-            contentDescription = "Edit allowed users"
-        }, isError = allowedUsersError != null)
+        TextField(
+            value = allowedUsers,
+            onValueChange = onChangeAllowedUsers,
+            label = {
+                Text("Allowed Users")
+            },
+            modifier = Modifier.semantics {
+                contentDescription = "Edit allowed users"
+            },
+            isError = allowedUsersError != null,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
+        )
         allowedUsersError?.let { error ->
             Text(error, modifier = Modifier.semantics {
                 contentDescription = "Allowed users hint"
@@ -354,7 +419,7 @@ private fun QuestionEditorPreview() {
         Column {
             Card {
                 QuestionEditor(
-                    questionState = QuestionState.Empty,
+                    questionState = QuestionState.Empty(),
                     onChangeQuestionType = {},
                     onEditQuestion = {},
                     isEditing = false
@@ -444,7 +509,7 @@ private fun QuestionTypeSelector(
 private fun QuestionTypeSelectorPreview() {
     QuizAppTheme {
         Column {
-            QuestionTypeSelector(questionState = QuestionState.Empty, onSelectType = {})
+            QuestionTypeSelector(questionState = QuestionState.Empty(), onSelectType = {})
             Spacer(Modifier.fillMaxWidth())
             QuestionTypeSelector(questionState = QuestionState.FillIn(), onSelectType = {})
             Spacer(Modifier.fillMaxWidth())
@@ -457,6 +522,7 @@ private fun QuestionTypeSelectorPreview() {
  * Editor for a MultipleChoice Question. Allows adding, editing, and removing
  * individual answers.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun MultipleChoiceQuestion(
     question: Question.MultipleChoice,
@@ -469,9 +535,17 @@ private fun MultipleChoiceQuestion(
     onDeleteAnswer: (Int) -> Unit,
     isEditing: Boolean,
 ) {
-    TextField(value = question.text, onValueChange = onChangePrompt, label = {
-        Text("Question prompt")
-    }, isError = questionTextError != null)
+    val keyboardController = LocalSoftwareKeyboardController.current
+    TextField(
+        value = question.text,
+        onValueChange = { onChangePrompt(it) },
+        label = {
+            Text("Question prompt")
+        },
+        isError = questionTextError != null,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
+    )
     questionTextError?.let {
         Text(it, modifier = Modifier.semantics {
             contentDescription = "Question prompt hint"
@@ -533,6 +607,7 @@ private fun MultipleChoiceQuestionPreview() {
 /**
  * A single answer/choice for a MultipleChoice Question.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun MultipleChoiceAnswer(
     index: Int,
@@ -544,6 +619,7 @@ private fun MultipleChoiceAnswer(
     onDelete: () -> Unit,
     isEditing: Boolean
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
     Row {
         // Row that looks like: (Radio) 1. answer text [Delete]
         RadioButton(selected = selected, onClick = onSelected, enabled = !isEditing,
@@ -551,21 +627,32 @@ private fun MultipleChoiceAnswer(
                 contentDescription = "Pick answer ${index + 1}"
             })
         Column {
-            TextField(value = text, onValueChange = onChangeText, label = {
-                Text("Answer text")
-            }, modifier = Modifier.semantics {
-                contentDescription = "Edit answer ${index + 1} text"
-            }, isError = answerError != null)
+            TextField(
+                value = text,
+                onValueChange = { onChangeText(it) },
+                label = {
+                    Text("Answer text")
+                },
+                modifier = Modifier
+                    .semantics {
+                        contentDescription = "Edit answer ${index + 1} text"
+                    },
+                isError = answerError != null,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
+            )
             answerError?.let {
                 Text(it, modifier = Modifier.semantics {
                     contentDescription = "Answer ${index + 1} hint"
                 })
             }
         }
-        IconButton(onClick = onDelete, modifier = Modifier.semantics {
-            contentDescription = "Delete answer ${index + 1}"
-        }) {
-            Icon(Icons.Default.Delete, null)
+        if (!isEditing) {
+            IconButton(onClick = onDelete, modifier = Modifier.semantics {
+                contentDescription = "Delete answer ${index + 1}"
+            }) {
+                Icon(Icons.Default.Delete, null)
+            }
         }
     }
 }
@@ -590,6 +677,7 @@ private fun MultipleChoiceAnswerPreview() {
 /**
  * Provides an editable prompt and correctAnswer for a Fill in the blank Question.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun FillInQuestion(
     question: Question.FillIn,
@@ -598,24 +686,34 @@ private fun FillInQuestion(
     onEditQuestion: (Question.FillIn) -> Unit,
     isEditing: Boolean,
 ) {
-    TextField(value = question.text, onValueChange = {
-        onEditQuestion(question.copy(text = it))
-    }, label = {
-        Text("Question prompt")
-    }, isError = questionTextError != null)
+    val keyboardController = LocalSoftwareKeyboardController.current
+    TextField(
+        value = question.text,
+        onValueChange = { onEditQuestion(question.copy(text = it)) },
+        label = {
+            Text("Question prompt")
+        },
+        isError = questionTextError != null,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
+    )
     questionTextError?.let {
         Text(it, modifier = Modifier.semantics {
             contentDescription = "Question prompt hint"
         })
     }
-    TextField(value = question.correctAnswer!!, onValueChange = {
+
+    TextField(value = question.correctAnswer ?: "", onValueChange = {
         onEditQuestion(question.copy(correctAnswer = it))
     }, label = {
         Text("Correct answer")
-    }, modifier = Modifier.semantics {
-        contentDescription = "Change correct answer text"
-    }, enabled = !isEditing,
-        isError = answerError != null
+    }, modifier = Modifier
+        .semantics {
+            contentDescription = "Change correct answer text"
+        }, enabled = !isEditing,
+        isError = answerError != null,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
     )
     answerError?.let {
         Text(it, modifier = Modifier.semantics {

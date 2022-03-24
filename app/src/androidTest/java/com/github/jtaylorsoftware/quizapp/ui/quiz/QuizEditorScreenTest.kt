@@ -1,11 +1,13 @@
 package com.github.jtaylorsoftware.quizapp.ui.quiz
 
-import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.jtaylorsoftware.quizapp.data.Question
-import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
 import io.mockk.*
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -239,7 +241,7 @@ class QuizEditorScreenTest {
     fun whenCreating_displaysFAB_andCanAddQuestion_andPickType() {
         val questions = mutableStateListOf<QuestionState>()
         val addQuestion = spyk<() -> Unit>({
-            questions.add(QuestionState.Empty)
+            questions.add(QuestionState.Empty())
         })
 
         composeTestRule.setContent {
@@ -270,10 +272,35 @@ class QuizEditorScreenTest {
     }
 
     @Test
+    fun whenCreating_canAddMultipleEmptyQuestion() {
+        val questions = mutableStateListOf<QuestionState>()
+        val addQuestion = spyk<() -> Unit>({
+            questions.add(QuestionState.Empty())
+        })
+
+        composeTestRule.setContent {
+            QuizEditorScreen(
+                QuizState(),
+                questions = questions,
+                onChangeQuestionType = { _, _ -> },
+                onChangeQuizState = {},
+                onEditQuestion = { _, _ -> },
+                onAddQuestion = addQuestion,
+                onDeleteQuestion = {},
+                onSubmit = {},
+            )
+        }
+
+        // Click FAB twice, adding two Empty questions
+        composeTestRule.onNodeWithContentDescription("Add question").performClick()
+        composeTestRule.onNodeWithContentDescription("Add question").performClick()
+    }
+
+    @Test
     fun whenEditing_doesNotDisplayFAB_andCannotAddQuestions() {
         val questions = mutableStateListOf<QuestionState>()
         val addQuestion = spyk<() -> Unit>({
-            questions.add(QuestionState.Empty)
+            questions.add(QuestionState.Empty())
         })
         composeTestRule.setContent {
             QuizEditorScreen(
@@ -300,7 +327,7 @@ class QuizEditorScreenTest {
     fun whenCreating_oneTypeCanBeSelected() {
         val questions = mutableStateListOf<QuestionState>()
         val addQuestion = spyk<() -> Unit>({
-            questions.add(QuestionState.Empty)
+            questions.add(QuestionState.Empty())
         })
         val changeQuestionType = spyk<(Int, Question.Type) -> Unit>({ index, type ->
             questions[index] = when (type) {
@@ -354,10 +381,10 @@ class QuizEditorScreenTest {
     }
 
     @Test
-    fun whenCreating_canAddMultipleChoiceAnswers() {
+    fun whenCreating_canAddAndDeleteMultipleChoiceAnswers() {
         val questions = mutableStateListOf<QuestionState>()
         val addQuestion = spyk<() -> Unit>({
-            questions.add(QuestionState.Empty)
+            questions.add(QuestionState.Empty())
         })
         val changeQuestionType = spyk<(Int, Question.Type) -> Unit>({ index, type ->
             questions[index] = when (type) {
@@ -397,7 +424,9 @@ class QuizEditorScreenTest {
             .assertHasClickAction()
         composeTestRule.onNodeWithContentDescription("Edit answer 1 text")
             .performTextInput("answer")
-        composeTestRule.onNodeWithContentDescription("Delete answer 1").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Edit answer 1 text").performImeAction()
+
+        composeTestRule.onNodeWithContentDescription("Delete answer 1").performClick()
 
         verify {
             addQuestion()
@@ -415,7 +444,7 @@ class QuizEditorScreenTest {
     fun whenCreating_canAddFillInQuestion() {
         val questions = mutableStateListOf<QuestionState>()
         val addQuestion = spyk<() -> Unit>({
-            questions.add(QuestionState.Empty)
+            questions.add(QuestionState.Empty())
         })
         val changeQuestionType = spyk<(Int, Question.Type) -> Unit>({ index, type ->
             questions[index] = when (type) {
@@ -459,10 +488,23 @@ class QuizEditorScreenTest {
     }
 
     @Test
-    fun whenEditing_cannotAddMultipleChoiceAnswers() {
-        val questions = mutableStateListOf<QuestionState>()
+    fun whenEditing_cannotAddOrDeleteMultipleChoiceAnswers() {
+        val questions = mutableStateListOf<QuestionState>(
+            QuestionState.MultipleChoice(
+                Question.MultipleChoice(
+                    answers = listOf(
+                        Question.MultipleChoice.Answer("answer text 1"),
+                        Question.MultipleChoice.Answer("answer text 2")
+                    ),
+                ),
+                answerErrors = listOf(null, null)
+            )
+        )
         val addQuestion = spyk<() -> Unit>({
-            questions.add(QuestionState.Empty)
+            questions.add(QuestionState.Empty())
+        })
+        val editQuestion = spyk<(Int, QuestionState) -> Unit>({ index, question ->
+            questions[index] = question
         })
         composeTestRule.setContent {
             QuizEditorScreen(
@@ -470,7 +512,7 @@ class QuizEditorScreenTest {
                 questions = questions,
                 onChangeQuestionType = {_,_->},
                 onChangeQuizState = {},
-                onEditQuestion = { _,_-> },
+                onEditQuestion = editQuestion,
                 onAddQuestion = {},
                 onDeleteQuestion = {},
                 onSubmit = {},
@@ -481,8 +523,12 @@ class QuizEditorScreenTest {
         // Can't add answers
         composeTestRule.onNodeWithContentDescription("Add question").assertDoesNotExist()
 
+        // Can't delete answers
+        composeTestRule.onNodeWithContentDescription("Delete answer 1").assertDoesNotExist()
+
         verify(exactly = 0) {
             addQuestion()
+            editQuestion(any(), any())
         }
         confirmVerified(addQuestion)
     }
@@ -501,7 +547,7 @@ class QuizEditorScreenTest {
             )
         )
         val addQuestion = spyk<() -> Unit>({
-            questions.add(QuestionState.Empty)
+            questions.add(QuestionState.Empty())
         })
         val editQuestion = spyk<(Int, QuestionState) -> Unit>({ index, question ->
             questions[index] = question
@@ -563,6 +609,40 @@ class QuizEditorScreenTest {
         composeTestRule.onNodeWithContentDescription("Pick answer 1").assertIsNotEnabled()
         composeTestRule.onNodeWithContentDescription("Pick answer 2").assertIsNotEnabled()
     }
+
+    @Test
+    fun whenEditing_cannotChangeQuestionType() {
+        val questions = mutableStateListOf<QuestionState>(
+            QuestionState.MultipleChoice(
+                Question.MultipleChoice(
+                    answers = listOf(
+                        Question.MultipleChoice.Answer("answer text 1"),
+                        Question.MultipleChoice.Answer("answer text 2")
+                    )
+                ),
+                answerErrors = listOf(null, null)
+            )
+        )
+        composeTestRule.setContent {
+            QuizEditorScreen(
+                QuizState(),
+                questions = questions,
+                onChangeQuestionType = { _, _ -> },
+                onChangeQuizState = {},
+                onEditQuestion = { _, _ -> },
+                onAddQuestion = {},
+                onDeleteQuestion = {},
+                onSubmit = {},
+                isEditing = true,
+            )
+        }
+
+
+        // Should not exist
+        composeTestRule.onNodeWithContentDescription("Multiple choice question").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Fill in the blank question").assertDoesNotExist()
+    }
+
 
     @Test
     fun whenEditing_cannotChangeFillInAnswer() {
