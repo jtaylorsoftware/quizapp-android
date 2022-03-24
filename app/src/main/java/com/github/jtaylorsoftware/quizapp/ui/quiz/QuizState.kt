@@ -5,6 +5,7 @@ import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import java.util.*
+import kotlin.math.max
 
 /**
  * Contains simple header data for a Quiz, such as expiration and title.
@@ -164,7 +165,14 @@ fun QuestionState.MultipleChoice.changeAnswer(
 fun QuestionState.MultipleChoice.removeAnswer(
     index: Int,
 ): QuestionState.MultipleChoice {
+    var correctAnswer = question.correctAnswer
+    if (index == correctAnswer) {
+        correctAnswer = max(0, correctAnswer - 1)
+    }
     val newAnswers = question.answers.toMutableList().apply { removeAt(index) }
     val newErrors = answerErrors.toMutableList().apply { removeAt(index) }
-    return copy(question = question.copy(answers = newAnswers), answerErrors = newErrors)
+    return copy(
+        question = question.copy(correctAnswer = correctAnswer, answers = newAnswers),
+        answerErrors = newErrors
+    )
 }

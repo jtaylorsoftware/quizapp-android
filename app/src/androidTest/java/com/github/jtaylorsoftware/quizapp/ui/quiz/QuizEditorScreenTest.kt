@@ -578,6 +578,118 @@ class QuizEditorScreenTest {
     }
 
     @Test
+    fun whenCreating_canDeleteCorrectAnswer() {
+        val questions = mutableStateListOf<QuestionState>(
+            QuestionState.MultipleChoice(
+                Question.MultipleChoice(
+                    correctAnswer = 2, // start with "answer text 3" as correct
+                    answers = listOf(
+                        Question.MultipleChoice.Answer("answer text 1"),
+                        Question.MultipleChoice.Answer("answer text 2"),
+                        Question.MultipleChoice.Answer("answer text 3"),
+                    ),
+                ),
+                answerErrors = listOf(null, null, null)
+            )
+        )
+        val addQuestion = spyk<() -> Unit>({
+            questions.add(QuestionState.Empty())
+        })
+        val editQuestion = spyk<(Int, QuestionState) -> Unit>({ index, question ->
+            questions[index] = question
+        })
+        composeTestRule.setContent {
+            QuizEditorScreen(
+                QuizState(),
+                questions = questions,
+                onChangeQuestionType = { _, _ -> },
+                onChangeQuizState = {},
+                onEditQuestion = editQuestion,
+                onAddQuestion = addQuestion,
+                onDeleteQuestion = {},
+                onSubmit = {},
+            )
+        }
+
+        // Remove answer text 3, which is currently selected
+        composeTestRule.onNodeWithContentDescription("Delete answer 3").performClick()
+
+        // Should now be one less
+        assertEquals(1, (questions[0].question as Question.MultipleChoice).correctAnswer!!)
+
+        // Now remove answer text 2
+        composeTestRule.onNodeWithContentDescription("Delete answer 2").performClick()
+
+        // Should now be 0
+        assertEquals(0, (questions[0].question as Question.MultipleChoice).correctAnswer!!)
+
+        // Remove the last answer
+        composeTestRule.onNodeWithContentDescription("Delete answer 1").performClick()
+
+        // Should not go negative
+        assertEquals(0, (questions[0].question as Question.MultipleChoice).correctAnswer!!)
+    }
+
+    @Test
+    fun whenCreating_canDeleteCorrectAnswerOutOfOrder() {
+        val questions = mutableStateListOf<QuestionState>(
+            QuestionState.MultipleChoice(
+                Question.MultipleChoice(
+                    correctAnswer = 1, // start with "answer text 2" as correct
+                    answers = listOf(
+                        Question.MultipleChoice.Answer("answer text 1"),
+                        Question.MultipleChoice.Answer("answer text 2"),
+                        Question.MultipleChoice.Answer("answer text 3"),
+                    ),
+                ),
+                answerErrors = listOf(null, null, null)
+            )
+        )
+        val addQuestion = spyk<() -> Unit>({
+            questions.add(QuestionState.Empty())
+        })
+        val editQuestion = spyk<(Int, QuestionState) -> Unit>({ index, question ->
+            questions[index] = question
+        })
+        composeTestRule.setContent {
+            QuizEditorScreen(
+                QuizState(),
+                questions = questions,
+                onChangeQuestionType = { _, _ -> },
+                onChangeQuizState = {},
+                onEditQuestion = editQuestion,
+                onAddQuestion = addQuestion,
+                onDeleteQuestion = {},
+                onSubmit = {},
+            )
+        }
+
+        // Remove answer text 2, which is currently selected
+        composeTestRule.onNodeWithContentDescription("Delete answer 2").performClick()
+
+        // Should now be one less
+        assertEquals(0, (questions[0].question as Question.MultipleChoice).correctAnswer!!)
+
+        // Now pick answer 2
+        composeTestRule.onNodeWithContentDescription("Pick answer 2").performClick()
+
+        // Should now be set to 1 again
+        assertEquals(1, (questions[0].question as Question.MultipleChoice).correctAnswer!!)
+
+        // Now remove answer 2 (index 1)
+        composeTestRule.onNodeWithContentDescription("Delete answer 2").performClick()
+
+        // Should now be 0
+        assertEquals(0, (questions[0].question as Question.MultipleChoice).correctAnswer!!)
+
+        // Remove last answer
+        composeTestRule.onNodeWithContentDescription("Delete answer 1").performClick()
+
+        // Should not go negative
+        assertEquals(0, (questions[0].question as Question.MultipleChoice).correctAnswer!!)
+    }
+
+    @Test
     fun whenEditing_cannotChangeMultipleChoiceCorrectAnswer() {
         val questions = mutableStateListOf<QuestionState>(
             QuestionState.MultipleChoice(
