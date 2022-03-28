@@ -28,7 +28,18 @@ import com.github.jtaylorsoftware.quizapp.data.QuizForm
 import com.github.jtaylorsoftware.quizapp.data.Response
 
 /**
+ * Renders a form for a user to respond to a quiz. The given [responses] should be
+ * of the appropriate size, and each [ResponseState] should be the appropriate type
+ * for its matching question of [quiz]. If either constraint is not met, [IllegalArgumentException]
+ * will be thrown, potentially in the middle of rendering questions if the size constraint is met
+ * but not the type constraint.
  *
+ * @param quiz The quiz to respond to. Provides the question text and possible answers.
+ * @param responses The pre-allocated list of responses to each question. The chosen answers
+ *                  should be updated by the user's actions.
+ * @param onChangeResponse Callback invoked when the user changes their answer for a response to
+ *                         a single question.
+ * @param onSubmit Callback invoked when the user taps the 'submit' button.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -110,10 +121,13 @@ private fun QuestionForm(
     when (question) {
         is Question.Empty -> throw IllegalArgumentException("Cannot use Question.Empty in QuestionForm")
         is Question.FillIn -> {
+            require(responseState.response is Response.FillIn) {
+                "Response type must be the same as Question type (FillIn)"
+            }
             FillInQuestionForm(
                 index,
                 "${index + 1}. ${question.text}:",
-                (responseState.response as Response.FillIn).answer,
+                responseState.response.answer,
                 responseState.error,
                 onChangeAnswer = {
                     onChangeResponse(
@@ -124,11 +138,14 @@ private fun QuestionForm(
             )
         }
         is Question.MultipleChoice -> {
+            require(responseState.response is Response.MultipleChoice) {
+                "Response type must be the same as Question type (MultipleChoice)"
+            }
             MultipleChoiceQuestionForm(
                 index,
                 "${index + 1}. ${question.text}:",
                 question.answers,
-                (responseState.response as Response.MultipleChoice).choice,
+                responseState.response.choice,
                 responseState.error,
                 onChangeChoice = {
                     onChangeResponse(
