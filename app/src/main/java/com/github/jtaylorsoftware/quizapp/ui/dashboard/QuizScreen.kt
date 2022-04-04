@@ -20,7 +20,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.github.jtaylorsoftware.quizapp.R
-import com.github.jtaylorsoftware.quizapp.data.QuizListing
+import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
+import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizListing
+
 import com.github.jtaylorsoftware.quizapp.util.describeMax
 import com.github.jtaylorsoftware.quizapp.util.isInPast
 import com.github.jtaylorsoftware.quizapp.util.periodBetweenNow
@@ -40,16 +42,16 @@ import java.time.Instant
 @Composable
 fun QuizScreen(
     quizzes: List<QuizListing>,
-    onDeleteQuiz: (String) -> Unit,
-    navigateToEditor: (String) -> Unit,
-    navigateToResults: (String) -> Unit
+    onDeleteQuiz: (ObjectId) -> Unit,
+    navigateToEditor: (ObjectId) -> Unit,
+    navigateToResults: (ObjectId) -> Unit
 ) {
     LazyColumn {
         item {
             Text("Your Quizzes")
         }
 
-        items(quizzes, key = { it.id }) { quiz ->
+        items(quizzes, key = { it.id.value }) { quiz ->
             QuizListItem(quiz, onDeleteQuiz, navigateToEditor, navigateToResults)
         }
     }
@@ -67,9 +69,9 @@ fun QuizScreen(
 @Composable
 private fun QuizListItem(
     quiz: QuizListing,
-    onDeleteQuiz: (String) -> Unit,
-    navigateToEditor: (String) -> Unit,
-    navigateToResults: (String) -> Unit
+    onDeleteQuiz: (ObjectId) -> Unit,
+    navigateToEditor: (ObjectId) -> Unit,
+    navigateToResults: (ObjectId) -> Unit
 ) {
     val questionNoun = rememberCapitalizedNoun(quiz.questionCount, "question", "questions")
     val responseNoun = rememberCapitalizedNoun(quiz.resultsCount, "response", "responses")

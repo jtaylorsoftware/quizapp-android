@@ -28,8 +28,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.R
-import com.github.jtaylorsoftware.quizapp.data.Question
-import com.github.jtaylorsoftware.quizapp.data.Quiz
+import com.github.jtaylorsoftware.quizapp.data.QuestionType
+import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
 import com.github.jtaylorsoftware.quizapp.ui.components.AppDatePicker
 import com.github.jtaylorsoftware.quizapp.ui.components.AppTimePicker
 import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
@@ -64,7 +64,7 @@ fun QuizEditorScreen(
     questions: List<QuestionState>,
     onChangeQuizState: (QuizState) -> Unit,
     onAddQuestion: () -> Unit,
-    onChangeQuestionType: (Int, Question.Type) -> Unit,
+    onChangeQuestionType: (Int, QuestionType) -> Unit,
     onEditQuestion: (Int, QuestionState) -> Unit,
     onDeleteQuestion: (Int) -> Unit,
     onSubmit: () -> Unit,
@@ -370,7 +370,7 @@ private fun Expiration(
 @Composable
 private fun QuestionEditor(
     questionState: QuestionState,
-    onChangeQuestionType: (Question.Type) -> Unit,
+    onChangeQuestionType: (QuestionType) -> Unit,
     onEditQuestion: (QuestionState) -> Unit,
     isEditing: Boolean,
 ) {
@@ -461,7 +461,7 @@ private fun QuestionEditorPreview() {
 @Composable
 private fun QuestionTypeSelector(
     questionState: QuestionState,
-    onSelectType: (Question.Type) -> Unit,
+    onSelectType: (QuestionType) -> Unit,
 ) {
     val selectedType = questionState.question.type
     Row {
@@ -473,30 +473,30 @@ private fun QuestionTypeSelector(
             Box(
                 Modifier
                     .selectable(
-                        selected = selectedType == Question.Type.FillIn,
-                        onClick = { onSelectType(Question.Type.FillIn) })
+                        selected = selectedType == QuestionType.FillIn,
+                        onClick = { onSelectType(QuestionType.FillIn) })
                     .size(48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_border_color_24),
                     contentDescription = "Fill in the blank question",
-                    tint = if (selectedType == Question.Type.FillIn) MaterialTheme.colors.primary else Color.DarkGray,
+                    tint = if (selectedType == QuestionType.FillIn) MaterialTheme.colors.primary else Color.DarkGray,
                 )
             }
 
             Box(
                 Modifier
                     .selectable(
-                        selected = selectedType == Question.Type.MultipleChoice,
-                        onClick = { onSelectType(Question.Type.MultipleChoice) })
+                        selected = selectedType == QuestionType.MultipleChoice,
+                        onClick = { onSelectType(QuestionType.MultipleChoice) })
                     .size(48.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_format_list_numbered_24),
                     contentDescription = "Multiple choice question",
-                    tint = if (selectedType == Question.Type.MultipleChoice) MaterialTheme.colors.primary else Color.DarkGray,
+                    tint = if (selectedType == QuestionType.MultipleChoice) MaterialTheme.colors.primary else Color.DarkGray,
                 )
             }
 

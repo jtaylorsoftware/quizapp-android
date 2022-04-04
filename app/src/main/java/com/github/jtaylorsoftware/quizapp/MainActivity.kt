@@ -8,64 +8,93 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.github.jtaylorsoftware.quizapp.data.QuizListing
-import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
-import com.github.jtaylorsoftware.quizapp.ui.dashboard.ProfileScreen
-import com.github.jtaylorsoftware.quizapp.ui.dashboard.QuizScreen
+import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
+import com.github.jtaylorsoftware.quizapp.data.domain.models.QuestionResponse
+import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
+import com.github.jtaylorsoftware.quizapp.ui.quiz.QuizFormScreen
+import com.github.jtaylorsoftware.quizapp.ui.quiz.ResponseState
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.temporal.ChronoUnit
 
 class MainActivity : ComponentActivity() {
-    private val quizzes = listOf(
-        // Expired, created 5 days ago
-        QuizListing(
-            id = "123",
-            date = Instant.now().minus(5, ChronoUnit.DAYS),
-            expiration = Instant.now().minus(3, ChronoUnit.DAYS),
-            title = "Quiz 1",
-            questionCount = 1,
-            resultsCount = 1,
+    //    private var quizState: QuizState by mutableStateOf(QuizState())
+//    private var questions = mutableStateListOf<QuestionState>()
+    private val questions = listOf(
+        Question.MultipleChoice(
+            text = "MC Question 1", answers = listOf(
+                Question.MultipleChoice.Answer("MC Answer 1-1"),
+                Question.MultipleChoice.Answer("MC Answer 1-2"),
+                Question.MultipleChoice.Answer("MC Answer 1-3"),
+            )
         ),
-        // Not expired, created 5 months ago
-        QuizListing(
-            id = "456",
-            date = LocalDateTime.now().minusMonths(5)
-                .atZone(ZoneId.systemDefault()).toInstant(),
-            title = "Quiz 2",
-            questionCount = 2,
-            resultsCount = 2,
+        Question.FillIn(text = "Fill Question 1"),
+        Question.FillIn(text = "Fill Question 2"),
+        Question.MultipleChoice(
+            text = "MC Question 2", answers = listOf(
+                Question.MultipleChoice.Answer("MC Answer 2-1"),
+                Question.MultipleChoice.Answer("MC Answer 2-2"),
+                Question.MultipleChoice.Answer("MC Answer 2-3"),
+            )
         ),
-        // Not expired, created 5 years ago
-        QuizListing(
-            id = "789",
-            date = LocalDateTime.now().minusYears(5)
-                .atZone(ZoneId.systemDefault()).toInstant(),
-            title = "Quiz 3",
-            questionCount = 3,
-            resultsCount = 3,
-        ),
+        Question.FillIn(text = "Fill Question 3"),
     )
+    private val quiz = QuizForm(
+        createdBy = "Username123",
+        title = "Quiztitle123",
+        questions = questions,
+    )
+
+    private lateinit var responses: SnapshotStateList<ResponseState>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        responses = mutableStateListOf()
+        questions.forEach {
+            when (it) {
+                is Question.MultipleChoice -> {
+                    responses.add(ResponseState(QuestionResponse.MultipleChoice(choice = -1)))
+                }
+                is Question.FillIn -> {
+                    responses.add(ResponseState(QuestionResponse.FillIn()))
+                }
+                else -> throw IllegalArgumentException()
+            }
+        }
+        val changeResponse: (Int, ResponseState) -> Unit = { i, r ->
+            responses[i] = r
+        }
         setContent {
             QuizAppTheme {
-                // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colors.background
                 ) {
-                    QuizScreen(
-                        quizzes = quizzes,
-                        onDeleteQuiz = {},
-                        navigateToEditor = {},
-                        navigateToResults = {}
-                    )
+//                    QuizEditorScreen(
+//                        quizState = quizState,
+//                        questions = questions,
+//                        onChangeQuizState = { quizState = it },
+//                        onAddQuestion = { questions.add(QuestionState.Empty()) },
+//                        onChangeQuestionType = { i, type ->
+//                            questions[i] = when (type) {
+//                                QuestionType.Empty -> throw IllegalArgumentException("Cannot change to empty")
+//                                QuestionType.FillIn -> QuestionState.FillIn()
+//                                QuestionType.MultipleChoice -> QuestionState.MultipleChoice()
+//                            }
+//                        },
+//                        onEditQuestion = { i, question ->
+//                            Log.d("FOCUS", "onEditQuestion called with key: ${question.key}")
+//                            questions[i] = question
+//                        },
+//                        onDeleteQuestion = { i -> questions.removeAt(i) },
+//                        onSubmit = { /*TODO*/ })
+                    QuizFormScreen(
+                        quiz,
+                        responses,
+                        onChangeResponse = changeResponse,
+                        onSubmit = {})
                 }
             }
         }

@@ -2,10 +2,12 @@ package com.github.jtaylorsoftware.quizapp.ui.components
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.material.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
@@ -35,12 +37,14 @@ fun EmailField(
                 contentDescription = fieldContentDescription
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            isError = state.dirty && state.error != null
         )
         Text(
             text = if (state.dirty) state.error ?: hint else hint,
             modifier = Modifier.semantics {
                 contentDescription = hintContentDescription
-            }
+            },
+            color = if (state.dirty && state.error != null) MaterialTheme.colors.error else Color.Unspecified
         )
     }
 }

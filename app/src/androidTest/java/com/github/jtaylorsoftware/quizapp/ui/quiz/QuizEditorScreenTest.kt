@@ -6,15 +6,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.jtaylorsoftware.quizapp.data.Question
+import com.github.jtaylorsoftware.quizapp.data.QuestionType
+import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
 import io.mockk.*
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
-import org.junit.runner.RunWith
 
-@RunWith(AndroidJUnit4::class)
+
 class QuizEditorScreenTest {
     // whenCreating_ -> Test functionality when Editor is in "Create New" mode
     //  - Everything is editable
@@ -329,11 +328,11 @@ class QuizEditorScreenTest {
         val addQuestion = spyk<() -> Unit>({
             questions.add(QuestionState.Empty())
         })
-        val changeQuestionType = spyk<(Int, Question.Type) -> Unit>({ index, type ->
+        val changeQuestionType = spyk<(Int, QuestionType) -> Unit>({ index, type ->
             questions[index] = when (type) {
-                Question.Type.Empty -> throw IllegalArgumentException("Cannot change to empty")
-                Question.Type.FillIn -> QuestionState.FillIn()
-                Question.Type.MultipleChoice -> QuestionState.MultipleChoice()
+                QuestionType.Empty -> throw IllegalArgumentException("Cannot change to empty")
+                QuestionType.FillIn -> QuestionState.FillIn()
+                QuestionType.MultipleChoice -> QuestionState.MultipleChoice()
             }
         })
         val editQuestion = spyk<(Int, QuestionState) -> Unit>({ index, question ->
@@ -373,8 +372,8 @@ class QuizEditorScreenTest {
 
         verify {
             addQuestion()
-            changeQuestionType(0, Question.Type.MultipleChoice)
-            changeQuestionType(0, Question.Type.FillIn)
+            changeQuestionType(0, QuestionType.MultipleChoice)
+            changeQuestionType(0, QuestionType.FillIn)
         }
 
         confirmVerified(addQuestion, changeQuestionType)
@@ -386,11 +385,11 @@ class QuizEditorScreenTest {
         val addQuestion = spyk<() -> Unit>({
             questions.add(QuestionState.Empty())
         })
-        val changeQuestionType = spyk<(Int, Question.Type) -> Unit>({ index, type ->
+        val changeQuestionType = spyk<(Int, QuestionType) -> Unit>({ index, type ->
             questions[index] = when (type) {
-                Question.Type.Empty -> throw IllegalArgumentException("Cannot change to empty")
-                Question.Type.FillIn -> QuestionState.FillIn()
-                Question.Type.MultipleChoice -> QuestionState.MultipleChoice()
+                QuestionType.Empty -> throw IllegalArgumentException("Cannot change to empty")
+                QuestionType.FillIn -> QuestionState.FillIn()
+                QuestionType.MultipleChoice -> QuestionState.MultipleChoice()
             }
         })
         val editQuestion = spyk<(Int, QuestionState) -> Unit>({ index, question ->
@@ -446,11 +445,11 @@ class QuizEditorScreenTest {
         val addQuestion = spyk<() -> Unit>({
             questions.add(QuestionState.Empty())
         })
-        val changeQuestionType = spyk<(Int, Question.Type) -> Unit>({ index, type ->
+        val changeQuestionType = spyk<(Int, QuestionType) -> Unit>({ index, type ->
             questions[index] = when (type) {
-                Question.Type.Empty -> throw IllegalArgumentException("Cannot change to empty")
-                Question.Type.FillIn -> QuestionState.FillIn()
-                Question.Type.MultipleChoice -> QuestionState.MultipleChoice()
+                QuestionType.Empty -> throw IllegalArgumentException("Cannot change to empty")
+                QuestionType.FillIn -> QuestionState.FillIn()
+                QuestionType.MultipleChoice -> QuestionState.MultipleChoice()
             }
         })
         val editQuestion = spyk<(Int, QuestionState) -> Unit>({ index, question ->

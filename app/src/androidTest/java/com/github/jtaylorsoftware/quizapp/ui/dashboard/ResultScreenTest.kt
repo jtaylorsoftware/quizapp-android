@@ -2,31 +2,30 @@ package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.jtaylorsoftware.quizapp.data.*
+import com.github.jtaylorsoftware.quizapp.data.domain.models.*
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
-import io.mockk.*
-import org.junit.Assert
+import io.mockk.confirmVerified
+import io.mockk.verify
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
-import org.junit.runner.RunWith
 
-@RunWith(AndroidJUnit4::class)
+
 class ResultScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
     private val listings = listOf(
         QuizResultListing(
-            id = "123",
-            quiz = "123",
+            id = ObjectId("123"),
+            quiz = ObjectId("123"),
             quizTitle = "Quiz 1",
             score = 0.5f,
             createdBy = "user1",
         ),
         QuizResultListing(
-            id = "456",
-            quiz = "456",
+            id = ObjectId("456"),
+            quiz = ObjectId("456"),
             quizTitle = "Quiz 2",
             score = 1.0f,
             createdBy = "user2",
@@ -35,10 +34,10 @@ class ResultScreenTest {
 
     private val results = listOf(
         QuizResult(
-            id = "result123",
-            quiz = "quiz123",
+            id = ObjectId("result123"),
+            quiz = ObjectId("quiz123"),
             quizTitle = "Quiz 1",
-            userId = "user123",
+            user = ObjectId("user123"),
             username = "username123",
             createdBy = "username456",
             score = 0.5f,
@@ -51,7 +50,7 @@ class ResultScreenTest {
 
     private val quizzes = listOf(
         QuizForm(
-            id = "quiz123",
+            id = ObjectId("quiz123"),
             createdBy = "username456",
             title = "Quiz 1",
             questions = listOf(
@@ -99,9 +98,10 @@ class ResultScreenTest {
 
     @Test
     fun resultList_whenClickDetails_callsNavigateToResultDetails() {
-        val navigateToDetails = mockk<(String) -> Unit>()
-        val quizId = slot<String>()
-        every { navigateToDetails(capture(quizId)) } returns Unit
+        var resultId: ObjectId? = null
+        val navigateToDetails: (ObjectId) -> Unit = {
+            resultId = it
+        }
 
         composeTestRule.setContent {
             QuizAppTheme {
@@ -112,11 +112,7 @@ class ResultScreenTest {
         // Press listing for details
         composeTestRule.onNodeWithText(listings[0].quizTitle, substring = true).performClick()
 
-        // Should've called with id
-        verify(exactly = 1) { navigateToDetails(any()) }
-        confirmVerified(navigateToDetails)
-
-        Assert.assertEquals(listings[0].quiz, quizId.captured)
+        assertEquals(listings[0].quiz, requireNotNull(resultId))
     }
 
     @Test
@@ -132,7 +128,8 @@ class ResultScreenTest {
         // Check header displayed
         composeTestRule.onNodeWithText("${result.username}'s results for \"${result.quizTitle}\"")
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Overall score: ${"%.2f".format(result.score * 100)}%").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Overall score: ${"%.2f".format(result.score * 100)}%")
+            .assertIsDisplayed()
     }
 
     @Test

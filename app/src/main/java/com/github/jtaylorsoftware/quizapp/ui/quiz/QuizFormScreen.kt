@@ -23,9 +23,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import com.github.jtaylorsoftware.quizapp.R
-import com.github.jtaylorsoftware.quizapp.data.Question
-import com.github.jtaylorsoftware.quizapp.data.QuizForm
-import com.github.jtaylorsoftware.quizapp.data.Response
+import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
+import com.github.jtaylorsoftware.quizapp.data.domain.models.QuestionResponse
+import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
 
 /**
  * Renders a form for a user to respond to a quiz. The given [responses] should be
@@ -121,7 +121,7 @@ private fun QuestionForm(
     when (question) {
         is Question.Empty -> throw IllegalArgumentException("Cannot use Question.Empty in QuestionForm")
         is Question.FillIn -> {
-            require(responseState.response is Response.FillIn) {
+            require(responseState.response is QuestionResponse.FillIn) {
                 "Response type must be the same as Question type (FillIn)"
             }
             FillInQuestionForm(
@@ -138,7 +138,7 @@ private fun QuestionForm(
             )
         }
         is Question.MultipleChoice -> {
-            require(responseState.response is Response.MultipleChoice) {
+            require(responseState.response is QuestionResponse.MultipleChoice) {
                 "Response type must be the same as Question type (MultipleChoice)"
             }
             MultipleChoiceQuestionForm(

@@ -2,16 +2,10 @@ package com.github.jtaylorsoftware.quizapp.ui.components
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.Icon
-import androidx.compose.material.IconToggleButton
-import androidx.compose.material.Text
-import androidx.compose.material.TextField
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.material.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -49,7 +43,9 @@ fun PasswordField(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
-                IconToggleButton(checked = passwordVisible, onCheckedChange = { passwordVisible = it }) {
+                IconToggleButton(
+                    checked = passwordVisible,
+                    onCheckedChange = { passwordVisible = it }) {
                     if (passwordVisible) {
                         // Password currently shown - draw "closed" eye action icon
                         Icon(
@@ -64,13 +60,15 @@ fun PasswordField(
                         )
                     }
                 }
-            }
+            },
+            isError = state.dirty && state.error != null
         )
         Text(
             text = if (state.dirty) state.error ?: hint else hint,
             modifier = Modifier.semantics {
                 contentDescription = hintContentDescription
-            }
+            },
+            color = if (state.dirty && state.error != null) MaterialTheme.colors.error else Color.Unspecified
         )
     }
 }

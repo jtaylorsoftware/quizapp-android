@@ -14,7 +14,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.github.jtaylorsoftware.quizapp.data.*
+import com.github.jtaylorsoftware.quizapp.data.domain.models.*
 
 /**
  * Displays the signed-in user's list of results for their created quizzes, in [QuizResultListing] format.
@@ -24,14 +24,14 @@ import com.github.jtaylorsoftware.quizapp.data.*
  *                          It accepts the id of the selected listing.
  */
 @Composable
-fun ResultScreen(results: List<QuizResultListing>, navigateToDetails: (String) -> Unit) {
+fun ResultScreen(results: List<QuizResultListing>, navigateToDetails: (ObjectId) -> Unit) {
     LazyColumn {
         item {
             Text("Your Quiz Results")
             Text("Tap a Result to view graded questions")
         }
 
-        items(results, key = { it.id }) { result ->
+        items(results, key = { it.id.value }) { result ->
             ResultListItem(result, navigateToDetails = { navigateToDetails(result.id) })
         }
     }
@@ -95,7 +95,7 @@ private fun GradedQuestion(index: Int, question: Question, gradedAnswer: GradedA
         is Question.MultipleChoice -> {
             check(gradedAnswer is GradedAnswer.MultipleChoice)
             GradedMultipleChoiceQuestion(index, question, gradedAnswer)
-        }
+        } else ->  throw IllegalArgumentException("Cannot display graded Empty Question")
     }
 }
 

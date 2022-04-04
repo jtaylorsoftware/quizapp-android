@@ -2,16 +2,14 @@ package com.github.jtaylorsoftware.quizapp.ui.register
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
 import io.mockk.*
 import org.junit.Assert
 import org.junit.Rule
 import org.junit.Test
-import org.junit.runner.RunWith
 
-@RunWith(AndroidJUnit4::class)
+
 class RegisterScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
@@ -43,7 +41,6 @@ class RegisterScreenTest {
     fun canInputUserAndPassAndConfirmPass() {
         val changeUser = mockk<(String) -> Unit>()
         val changePass = mockk<(String) -> Unit>()
-        val changeConfirmPass = mockk<(String) -> Unit>()
 
         composeTestRule.setContent {
             QuizAppTheme {
@@ -141,6 +138,7 @@ class RegisterScreenTest {
 
         composeTestRule.onNodeWithText("Username taken").assertIsDisplayed()
         composeTestRule.onNodeWithText("Password error").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Passwords do not match").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Confirm password").performTextInput("mismatch")
+        composeTestRule.onNodeWithText("Passwords do not match.").assertIsDisplayed()
     }
 }

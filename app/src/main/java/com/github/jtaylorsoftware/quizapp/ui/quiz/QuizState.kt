@@ -1,6 +1,6 @@
 package com.github.jtaylorsoftware.quizapp.ui.quiz
 
-import com.github.jtaylorsoftware.quizapp.data.Question
+import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
 import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -38,7 +38,7 @@ sealed interface QuestionState {
 
     /**
      * The error for the correct answer to this Question.
-     * Some [Question Types][Question.Type] may use a default correctAnswer,
+     * Some [Question Types][QuestionType] may use a default correctAnswer,
      * or may have no validation constraints, so there may never be an error.
      */
     val correctAnswerError: String?

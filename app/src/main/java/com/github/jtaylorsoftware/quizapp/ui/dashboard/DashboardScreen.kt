@@ -11,7 +11,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import com.github.jtaylorsoftware.quizapp.data.User
+import com.github.jtaylorsoftware.quizapp.data.domain.models.User
 import com.github.jtaylorsoftware.quizapp.util.toLocalizedString
 
 /**

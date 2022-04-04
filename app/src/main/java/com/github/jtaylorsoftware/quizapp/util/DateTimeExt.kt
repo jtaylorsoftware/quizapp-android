@@ -8,6 +8,13 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
 /**
+ * Returns an Instant representing this String. `this` should contain
+ * an ISO-8601 formatted UTC timestamp.
+ */
+fun String.toInstant(): Instant? =
+    if (this.isNotBlank()) Instant.parse(this) else null
+
+/**
  * Returns a localized string representing this date, with the format "LongMonth Day, Year"
  * (see [FormatStyle.LONG]).
  */

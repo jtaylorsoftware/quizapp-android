@@ -4,10 +4,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.github.jtaylorsoftware.quizapp.data.Question
-import com.github.jtaylorsoftware.quizapp.data.QuizForm
-import com.github.jtaylorsoftware.quizapp.data.Response
+import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
+import com.github.jtaylorsoftware.quizapp.data.domain.models.QuestionResponse
+import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
 import io.mockk.confirmVerified
 import io.mockk.justRun
 import io.mockk.mockk
@@ -16,9 +15,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import org.junit.runner.RunWith
 
-@RunWith(AndroidJUnit4::class)
+
 class QuizFormScreenTest {
 
     @get:Rule
@@ -57,10 +55,10 @@ class QuizFormScreenTest {
         questions.forEach {
             when (it) {
                 is Question.MultipleChoice -> {
-                    responses.add(ResponseState(Response.MultipleChoice()))
+                    responses.add(ResponseState(QuestionResponse.MultipleChoice()))
                 }
                 is Question.FillIn -> {
-                    responses.add(ResponseState(Response.FillIn()))
+                    responses.add(ResponseState(QuestionResponse.FillIn()))
                 }
                 else -> throw IllegalArgumentException()
             }
@@ -131,7 +129,7 @@ class QuizFormScreenTest {
         composeTestRule.onNodeWithTag("Select answer 2 for question 1", useUnmergedTree = true)
             .performClick()
 
-        assertEquals(1, (responses[0].response as Response.MultipleChoice).choice)
+        assertEquals(1, (responses[0].response as QuestionResponse.MultipleChoice).choice)
     }
 
     @Test
@@ -151,7 +149,7 @@ class QuizFormScreenTest {
         composeTestRule.onNodeWithTag("Fill in answer for question 2")
             .performTextInput(answerText)
 
-        assertEquals(answerText, (responses[1].response as Response.FillIn).answer)
+        assertEquals(answerText, (responses[1].response as QuestionResponse.FillIn).answer)
     }
 
     @Test

@@ -2,14 +2,12 @@ package com.github.jtaylorsoftware.quizapp.ui.components
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.mockk.*
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
-import org.junit.runner.RunWith
 
-@RunWith(AndroidJUnit4::class)
+
 class PasswordFieldTest {
     @get:Rule
     val composeTestRule = createComposeRule()
@@ -17,10 +15,17 @@ class PasswordFieldTest {
     @Test
     fun displaysGivenText() {
         composeTestRule.setContent {
-            PasswordField(TextFieldState(text = "mypassword"), {}, "Hint")
+            PasswordField(
+                TextFieldState(text = "mypassword"),
+                {},
+                fieldContentDescription = "Password",
+                hint = "Hint",
+                hintContentDescription = "Password hint"
+            )
         }
 
         composeTestRule.onNodeWithContentDescription("Password").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Password hint").assertIsDisplayed()
         composeTestRule.onNodeWithText("Hint").assertIsDisplayed()
     }
 
@@ -30,7 +35,7 @@ class PasswordFieldTest {
             PasswordField(
                 TextFieldState(text = "mypassword", error = "Password too short", dirty = false),
                 {},
-                "Hint"
+                hint = "Hint"
             )
         }
 
@@ -44,7 +49,7 @@ class PasswordFieldTest {
             PasswordField(
                 TextFieldState(text = "mypassword", error = "Password too short", dirty = true),
                 {},
-                "Hint"
+                hint = "Hint"
             )
         }
 
@@ -57,7 +62,7 @@ class PasswordFieldTest {
         val password = "mypassword"
 
         composeTestRule.setContent {
-            PasswordField(TextFieldState(text = password), {}, "Hint")
+            PasswordField(TextFieldState(text = password), {}, hint = "Hint")
         }
 
         // By default the password is not displayed
@@ -83,7 +88,7 @@ class PasswordFieldTest {
         every { onChange(capture(password)) } returns Unit
 
         composeTestRule.setContent {
-            PasswordField(TextFieldState(text = ""), onChange, "Hint")
+            PasswordField(TextFieldState(text = ""), onChange, hint = "Hint")
         }
 
         val inputPassword = "myinputpassword"
