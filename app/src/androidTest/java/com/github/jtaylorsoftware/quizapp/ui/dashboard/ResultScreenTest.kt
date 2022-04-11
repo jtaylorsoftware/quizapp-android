@@ -4,8 +4,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.github.jtaylorsoftware.quizapp.data.domain.models.*
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
-import io.mockk.confirmVerified
-import io.mockk.verify
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -69,7 +67,7 @@ class ResultScreenTest {
     fun resultList_shouldDisplayHeader() {
         composeTestRule.setContent {
             QuizAppTheme {
-                ResultScreen(listings, {})
+                QuizResultListScreen(listings, {})
             }
         }
 
@@ -80,7 +78,7 @@ class ResultScreenTest {
     fun resultList_hasResults_displaysAllResults() {
         composeTestRule.setContent {
             QuizAppTheme {
-                ResultScreen(listings, {})
+                QuizResultListScreen(listings, {})
             }
         }
 
@@ -105,7 +103,7 @@ class ResultScreenTest {
 
         composeTestRule.setContent {
             QuizAppTheme {
-                ResultScreen(listings.subList(0, 1), navigateToDetails)
+                QuizResultListScreen(listings.subList(0, 1), navigateToDetails)
             }
         }
 

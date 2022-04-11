@@ -8,7 +8,7 @@ import androidx.test.filters.MediumTest
 import com.github.jtaylorsoftware.quizapp.data.local.entities.QuizResultListingEntity
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
-import org.hamcrest.MatcherAssert
+import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.junit.After
 import org.junit.Before
@@ -110,7 +110,7 @@ class QuizResultListingDaoTest {
         val id = "RESULT1"
         val expected = results.first { it.id == id }
         val actual = dao.getById(id)
-        MatcherAssert.assertThat(actual, `is`(expected))
+        assertThat(actual, `is`(expected))
     }
 
     @Test
@@ -118,7 +118,7 @@ class QuizResultListingDaoTest {
         val userId = "USER1"
         val expected = results.filter { it.user == userId }
         val actual = dao.getAllByUser(userId)
-        MatcherAssert.assertThat(actual, `is`(expected))
+        assertThat(actual, `is`(expected))
     }
 
     @Test
@@ -126,7 +126,7 @@ class QuizResultListingDaoTest {
         val quizId = "QUIZ1"
         val expected = results.filter { it.quiz == quizId }
         val actual = dao.getAllByQuiz(quizId)
-        MatcherAssert.assertThat(actual, `is`(expected))
+        assertThat(actual, `is`(expected))
     }
 
     @Test
@@ -135,7 +135,37 @@ class QuizResultListingDaoTest {
         val userId = "USER1"
         val expected = results.first { it.quiz == quizId && it.user == userId }
         val actual = dao.getByQuizAndUser(quizId, userId)
-        MatcherAssert.assertThat(actual, `is`(expected))
+        assertThat(actual, `is`(expected))
+    }
+
+    @Test
+    fun deleteAllByQuiz_removesAllWithMatchingQuizId() = runTest {
+        dao.deleteAllByQuiz(results[0].quiz)
+        val cursor = db.query("SELECT COUNT(*) FROM result_listing", null)
+        cursor.moveToFirst()
+        val count = cursor.getInt(0)
+        assertThat(count, `is`(results.filter { it.quiz != results[0].quiz }.size))
+    }
+
+    @Test
+    fun deleteAllByUser_removesAllWithMatchingUser() = runTest {
+        dao.deleteAllByUser(results[0].user)
+        val cursor = db.query("SELECT COUNT(*) FROM result_listing", null)
+        cursor.moveToFirst()
+        val count = cursor.getInt(0)
+        assertThat(count, `is`(results.filter { it.user != results[0].user }.size))
+    }
+
+    @Test
+    fun deleteByQuizAndUser_deletesOnlyOneMatching() = runTest {
+        dao.deleteByQuizAndUser(results[0].quiz, results[0].user)
+        val cursor = db.query("SELECT COUNT(*) FROM result_listing", null)
+        cursor.moveToFirst()
+        val count = cursor.getInt(0)
+        assertThat(
+            count,
+            `is`(results.filter { it.user != results[0].user || it.quiz != results[0].quiz }.size)
+        )
     }
 
     @Test
@@ -144,6 +174,6 @@ class QuizResultListingDaoTest {
         val cursor = db.query("SELECT COUNT(*) FROM result_listing", null)
         cursor.moveToFirst()
         val count = cursor.getInt(0)
-        MatcherAssert.assertThat(count, `is`(0))
+        assertThat(count, `is`(0))
     }
 }

@@ -68,25 +68,3 @@ interface QuizService : QuizNetworkSource {
     @DELETE("quizzes/{id}")
     override suspend fun delete(@Path("id") id: String): NetworkResult<Unit>
 }
-//
-//class QuizNetworkSourceImpl @Inject constructor(
-//    private val service: QuizService
-//) : QuizNetworkSource {
-//    override suspend fun getById(id: String): NetworkResult<QuizDto> = service.getById(id)
-//
-//    override suspend fun getListingById(id: String): NetworkResult<QuizListingDto> =
-//        service.getListingById(id)
-//
-//    override suspend fun getForm(id: String): NetworkResult<QuizFormDto> = service.getForm(id)
-//
-//    override suspend fun createQuiz(quizDto: QuizDto): NetworkResult<ObjectIdResponse> =
-//        service.createQuiz(quizDto)
-//
-//    override suspend fun updateQuiz(
-//        id: String,
-//        updates: QuizDto
-//    ): NetworkResult<Unit> = service.updateQuiz(id, updates)
-//
-//    override suspend fun delete(id: String): NetworkResult<Unit> = service.delete(id)
-//}
-

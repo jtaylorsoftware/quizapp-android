@@ -3,6 +3,7 @@ package com.github.jtaylorsoftware.quizapp.data.local.entities
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizListing
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizListingDto
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -30,6 +31,17 @@ data class QuizListingEntity(
             isPublic = dto.isPublic,
             resultsCount = dto.resultsCount,
             questionCount = dto.questionCount
+        )
+
+        fun fromDomain(domain: QuizListing) = QuizListingEntity(
+            id = domain.id.value,
+            date = domain.date.toString(),
+            user = domain.createdBy.value,
+            title = domain.title,
+            expiration = domain.expiration.toString(),
+            isPublic = domain.isPublic,
+            resultsCount = domain.resultsCount,
+            questionCount = domain.questionCount
         )
     }
 }

@@ -1,11 +1,11 @@
-package com.github.jtaylorsoftware.quizapp.ui.register
+package com.github.jtaylorsoftware.quizapp.ui.signup
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
 import io.mockk.*
-import org.junit.Assert
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 
@@ -18,10 +18,12 @@ class RegisterScreenTest {
     fun showsRegisterForm() {
         composeTestRule.setContent {
             QuizAppTheme {
-                RegisterScreen(
-                    TextFieldState(error = null),
+                SignupScreen(
+                    TextFieldState(),
                     {},
-                    TextFieldState(error = null),
+                    TextFieldState(),
+                    {},
+                    TextFieldState(),
                     {},
                     {},
                     {}
@@ -38,17 +40,20 @@ class RegisterScreenTest {
     }
 
     @Test
-    fun canInputUserAndPassAndConfirmPass() {
+    fun canInputUserAndPassAndConfirmPassAndEmail() {
         val changeUser = mockk<(String) -> Unit>()
         val changePass = mockk<(String) -> Unit>()
+        val changeEmail = mockk<(String) -> Unit>()
 
         composeTestRule.setContent {
             QuizAppTheme {
-                RegisterScreen(
-                    TextFieldState(error = null),
+                SignupScreen(
+                    TextFieldState(),
                     changeUser,
-                    TextFieldState(error = null),
+                    TextFieldState(),
                     changePass,
+                    TextFieldState(),
+                    changeEmail,
                     {},
                     {}
                 )
@@ -57,18 +62,23 @@ class RegisterScreenTest {
 
         val user = slot<String>()
         val pass = slot<String>()
+        val email = slot<String>()
         every { changeUser(capture(user)) } returns Unit
         every { changePass(capture(pass)) } returns Unit
+        every { changeEmail(capture(email)) } returns Unit
 
         val inputUser = "testuser"
         val inputPass = "password"
+        val inputEmail = "email@example.com"
 
         composeTestRule.onNodeWithContentDescription("Username").performTextInput(inputUser)
+        composeTestRule.onNodeWithContentDescription("Email").performTextInput(inputEmail)
         composeTestRule.onNodeWithContentDescription("Password").performTextInput(inputPass)
         composeTestRule.onNodeWithContentDescription("Confirm password").performTextInput(inputPass)
 
-        Assert.assertEquals(inputUser, user.captured)
-        Assert.assertEquals(inputPass, pass.captured)
+        assertEquals(inputUser, user.captured)
+        assertEquals(inputPass, pass.captured)
+        assertEquals(inputEmail, email.captured)
     }
 
     @Test
@@ -77,10 +87,12 @@ class RegisterScreenTest {
 
         composeTestRule.setContent {
             QuizAppTheme {
-                RegisterScreen(
-                    TextFieldState(error = null),
+                SignupScreen(
+                    TextFieldState(),
                     {},
-                    TextFieldState(error = null),
+                    TextFieldState(),
+                    {},
+                    TextFieldState(),
                     {},
                     navigateToLogin = {},
                     register = register
@@ -97,15 +109,17 @@ class RegisterScreenTest {
     }
 
     @Test
-    fun whenSignInTextPressed_CallsLogin() {
+    fun whenSignInTextPressed_CallsNavigateToLogin() {
         val login = mockk<() -> Unit>()
 
         composeTestRule.setContent {
             QuizAppTheme {
-                RegisterScreen(
-                    TextFieldState(error = null),
+                SignupScreen(
+                    TextFieldState(),
                     {},
-                    TextFieldState(error = null),
+                    TextFieldState(),
+                    {},
+                    TextFieldState(),
                     {},
                     navigateToLogin = login,
                     register = {}
@@ -125,10 +139,12 @@ class RegisterScreenTest {
     fun whenStateHasErrors_DisplaysErrorMessages() {
         composeTestRule.setContent {
             QuizAppTheme {
-                RegisterScreen(
+                SignupScreen(
                     usernameState = TextFieldState(error = "Username taken", dirty = true),
                     {},
                     passwordState = TextFieldState(error = "Password error", dirty = true),
+                    {},
+                    TextFieldState(),
                     {},
                     {},
                     {}

@@ -1,9 +1,14 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
-import androidx.compose.ui.test.*
+import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
+import com.github.jtaylorsoftware.quizapp.data.domain.models.User
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
+import com.github.jtaylorsoftware.quizapp.util.toLocalizedString
 import io.mockk.confirmVerified
 import io.mockk.every
 import io.mockk.mockk
@@ -16,239 +21,84 @@ class ProfileScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
+    private val user = User(
+        username = "user123",
+        email = "user123@email.com",
+        quizzes = listOf(ObjectId("quiz1"), ObjectId("quiz2")),
+        results = listOf(ObjectId("result1"), ObjectId("result2"))
+    )
+    private val numQuizzes = user.quizzes.size
+    private val numResults = user.results.size
+
     @Test
     fun shouldDisplayContent() {
-        val email = "user123@email.com"
         composeTestRule.setContent {
-            QuizAppTheme {
-                ProfileScreen(
-                    email,
-                    TextFieldState(text = email),
-                    {},
-                    TextFieldState(),
-                    {},
-                    {}, {}
-                )
-            }
+            QuizAppTheme { ProfileScreen(user, {}, {}, {}) }
         }
 
-        composeTestRule.onNodeWithText("Edit Profile").assertIsDisplayed()
+        // Topmost ("Profile") card content
+        composeTestRule.onNodeWithText("Hello, ${user.username}").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Email: ${user.email}").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Joined: ${user.date.toLocalizedString()}").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Edit Profile").assertHasClickAction()
 
-        // Current email with button to toggle changing email
-        composeTestRule.onNodeWithText("Email: $email").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Change Email").assertHasClickAction()
+        // Card showing number of quizzes created with button to view list
+        composeTestRule.onNodeWithText("You've created $numQuizzes quizzes.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("View Quizzes").assertHasClickAction()
 
-        // Button to show password inputs
-        composeTestRule.onNodeWithText("Change Password").assertHasClickAction()
-
-        // Notice that account deletion not available in app
-        composeTestRule.onNodeWithText("Account deletion available when signed into the web app.")
-            .assertIsDisplayed()
+        // Card showing number of results with button to view list
+        composeTestRule.onNodeWithText("You have $numResults results.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("View Results").assertHasClickAction()
     }
 
     @Test
-    fun changeEmail_whenClicked_changesTextToField() {
-        val email = "user123@email.com"
+    fun editProfile_whenClicked_shouldDisplayProfileScreen() {
+        val navigateToProfileScreen = mockk<() -> Unit>()
+        every { navigateToProfileScreen() } returns Unit
+
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileScreen(
-                    email,
-                    TextFieldState(text = email),
-                    {},
-                    TextFieldState(),
-                    {},
-                    {}, {}
-                )
+                ProfileScreen(user, {}, {}, navigateToProfileScreen)
             }
         }
 
-        // Do click
-        composeTestRule.onNodeWithText("Change Email").performClick()
+        composeTestRule.onNodeWithText("Edit Profile").performClick()
 
-        // Should now be a field
-        composeTestRule.onNodeWithText("Email: $email").assertDoesNotExist()
-        composeTestRule.onNodeWithText(email).assertIsDisplayed()
-
-        // Should have cancel and confirm
-        composeTestRule.onNodeWithText("Cancel").assertHasClickAction()
-        composeTestRule.onNodeWithText("Submit").assertHasClickAction()
+        verify(exactly = 1) { navigateToProfileScreen() }
+        confirmVerified(navigateToProfileScreen)
     }
 
     @Test
-    fun cancelEmailChanges_whenClicked_changesFieldToText_discardsChanges() {
-        val submit = mockk<() -> Unit>()
-        every { submit() } returns Unit
-        val email = "prevemail@email.com"
-        var emailState = TextFieldState(text = email)
+    fun viewQuizzes_whenClicked_shouldDisplayQuizScreen() {
+        val navigateToQuizScreen = mockk<() -> Unit>()
+        every { navigateToQuizScreen() } returns Unit
+
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileScreen(
-                    email,
-                    emailState,
-                    onChangeEmail = { emailState = TextFieldState(text = it, dirty = true) },
-                    TextFieldState(),
-                    {},
-                    onSubmitEmail = submit,
-                    {}
-                )
+                ProfileScreen(user, navigateToQuizScreen, {}, {})
             }
         }
 
-        // Do click
-        composeTestRule.onNodeWithText("Change Email").performClick()
-        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("View Quizzes").performClick()
 
-        // Input a new email
-        val newEmail = "newemail@email.com"
-        composeTestRule.onNodeWithText(email).performTextInput(newEmail)
-
-        // Cancel changes
-        composeTestRule.onNodeWithText("Cancel").performClick()
-
-        // Ensure submit not called with undesired changes
-        verify(exactly = 0) { submit() }
-        confirmVerified(submit)
-
-        // Should now be plain text with original email display
-        // TODO - hoist open/close state
-        composeTestRule.onNodeWithText("Email: $email").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Email: $newEmail").assertDoesNotExist()
-        composeTestRule.onNodeWithText(newEmail).assertDoesNotExist()
+        verify(exactly = 1) { navigateToQuizScreen() }
+        confirmVerified(navigateToQuizScreen)
     }
 
     @Test
-    fun submitEmailChanges_whenClicked_callsSubmit() {
-        val submit = mockk<() -> Unit>()
-        every { submit() } returns Unit
-        val email = "prevemail@email.com"
-        var emailState = TextFieldState(text = email)
+    fun viewResults_whenClicked_shouldDisplayResultScreen() {
+        val navigateToResultScreen = mockk<() -> Unit>()
+        every { navigateToResultScreen() } returns Unit
 
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileScreen(
-                    email,
-                    emailState,
-                    onChangeEmail = { emailState = TextFieldState(text = it, dirty = true) },
-                    TextFieldState(),
-                    {},
-                    onSubmitEmail = submit,
-                    {}
-                )
+                ProfileScreen(user, {}, navigateToResultScreen, {})
             }
         }
 
-        // Do click
-        composeTestRule.onNodeWithText("Change Email").performClick()
+        composeTestRule.onNodeWithText("View Results").performClick()
 
-        // Input a new email
-        val newEmail = "newemail@email.com"
-        composeTestRule.onNodeWithText(email).performTextInput(newEmail)
-
-        // Click and verify call
-        composeTestRule.onNodeWithText("Submit").performClick()
-
-        verify(exactly = 1) { submit() }
-        confirmVerified(submit)
-
-        // TODO - hoist open/close state
-//        composeTestRule.onNodeWithText("Email: $newEmail").assertIsDisplayed()
-    }
-
-    @Test
-    fun changePassword_whenClicked_showsForm() {
-        val email = "prevemail@email.com"
-        composeTestRule.setContent {
-            QuizAppTheme {
-                ProfileScreen(
-                    email,
-                    TextFieldState(),
-                    {},
-                    TextFieldState(),
-                    {},
-                    {}, {}
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Change Password").performClick()
-        composeTestRule.waitForIdle()
-
-        composeTestRule.onNodeWithContentDescription("Password").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Confirm Password", ignoreCase = true).assertIsDisplayed()
-
-        // TODO - hoist open/close state
-        composeTestRule.onNodeWithText("Cancel").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Submit").assertIsDisplayed()
-    }
-
-    @Test
-    fun cancelPasswordChanges_whenClicked_hidesForm() {
-        val submit = mockk<() -> Unit>()
-        every { submit() } returns Unit
-        var passwordState = TextFieldState()
-        val email = "prevemail@email.com"
-        composeTestRule.setContent {
-            QuizAppTheme {
-                ProfileScreen(
-                    email,
-                    TextFieldState(),
-                    {},
-                    passwordState,
-                    onChangePassword = { passwordState = TextFieldState(text = it, dirty = true) },
-                    {},
-                    onSubmitPassword = submit
-                )
-            }
-        }
-
-        // Show form
-        composeTestRule.onNodeWithText("Change Password").performClick()
-
-        // Click Cancel
-        composeTestRule.onNodeWithText("Cancel").performClick()
-
-        // Ensure not submitted discarded changes
-        verify(exactly = 0) { submit() }
-        confirmVerified(submit)
-
-        // Form should be hidden
-        // TODO - hoist open/close state
-        composeTestRule.onNodeWithContentDescription("Password").assertDoesNotExist()
-        composeTestRule.onNodeWithContentDescription("Confirm Password", ignoreCase = true).assertDoesNotExist()
-    }
-
-    @Test
-    fun submitPasswordChanges_whenClicked_hidesFormAndCallsSubmit() {
-        val submit = mockk<() -> Unit>()
-        every { submit() } returns Unit
-        var passwordState = TextFieldState()
-        val email = "prevemail@email.com"
-        composeTestRule.setContent {
-            QuizAppTheme {
-                ProfileScreen(
-                    email,
-                    TextFieldState(text = email),
-                    {},
-                    passwordState,
-                    onChangePassword = { passwordState = TextFieldState(text = it) },
-                    {},
-                    onSubmitPassword = submit
-                )
-            }
-        }
-
-        // Show form
-        composeTestRule.onNodeWithText("Change Password").performClick()
-        composeTestRule.waitForIdle()
-
-        // Submit
-        composeTestRule.onNodeWithText("Submit").performClick()
-        verify(exactly = 1) { submit() }
-        confirmVerified(submit)
-
-        // Form should be hidden
-        // TODO - hoist open/close state
-//        composeTestRule.onNodeWithContentDescription("Password").assertDoesNotExist()
-//        composeTestRule.onNodeWithContentDescription("Confirm Password", ignoreCase = true).assertDoesNotExist()
+        verify(exactly = 1) { navigateToResultScreen() }
+        confirmVerified(navigateToResultScreen)
     }
 }

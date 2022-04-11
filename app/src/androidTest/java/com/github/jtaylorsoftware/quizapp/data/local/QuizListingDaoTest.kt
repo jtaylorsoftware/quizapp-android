@@ -94,6 +94,24 @@ class QuizListingDaoTest {
     }
 
     @Test
+    fun delete_removesOnlyOneById() = runTest {
+        dao.delete(quizzes[0].id)
+        val cursor = db.query("SELECT COUNT(*) FROM quiz_listing", null)
+        cursor.moveToFirst()
+        val count = cursor.getInt(0)
+        assertThat(count, `is`(quizzes.size - 1))
+    }
+
+    @Test
+    fun deleteAllByUser_removesAllWithMatchingUser() = runTest {
+        dao.deleteAllByUser(quizzes[0].user)
+        val cursor = db.query("SELECT COUNT(*) FROM quiz_listing", null)
+        cursor.moveToFirst()
+        val count = cursor.getInt(0)
+        assertThat(count, `is`(quizzes.filter { it.user != quizzes[0].user }.size))
+    }
+
+    @Test
     fun deleteAll_removesAllRows() = runTest {
         dao.deleteAll()
         val cursor = db.query("SELECT COUNT(*) FROM quiz_listing", null)

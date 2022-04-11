@@ -37,6 +37,21 @@ interface QuizResultListingDatabaseSource {
     suspend fun insertAll(listings: List<QuizResultListingEntity>)
 
     /**
+     * Deletes a listing where it has both [user] id and [quiz] id.
+     */
+    suspend fun deleteByQuizAndUser(quiz: String, user: String)
+
+    /**
+     * Deletes all listings by its quiz id.
+     */
+    suspend fun deleteAllByQuiz(quiz: String)
+
+    /**
+     * Deletes all listings by its user id.
+     */
+    suspend fun deleteAllByUser(user: String)
+
+    /**
      * Deletes all previously saved listings.
      */
     suspend fun deleteAll()
@@ -58,6 +73,15 @@ interface QuizResultListingDao : QuizResultListingDatabaseSource {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     override suspend fun insertAll(listings: List<QuizResultListingEntity>)
+
+    @Query("DELETE FROM result_listing WHERE quiz = :quiz AND user = :user")
+    override suspend fun deleteByQuizAndUser(quiz: String, user: String)
+
+    @Query("DELETE FROM result_listing WHERE quiz = :quiz")
+    override suspend fun deleteAllByQuiz(quiz: String)
+
+    @Query("DELETE FROM result_listing WHERE user = :user")
+    override suspend fun deleteAllByUser(user: String)
 
     @Query("DELETE FROM result_listing")
     override suspend fun deleteAll()

@@ -11,15 +11,16 @@ import com.github.jtaylorsoftware.quizapp.data.network.NetworkResult
 import com.github.jtaylorsoftware.quizapp.data.network.asListing
 import com.github.jtaylorsoftware.quizapp.data.network.dto.ApiError
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizResultDto
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.*
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.hamcrest.Matchers.containsInAnyOrder
 import org.hamcrest.core.IsInstanceOf
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.util.*
@@ -53,9 +54,15 @@ class QuizResultRepositoryTest {
 
     @Before
     fun beforeEach() {
+        Dispatchers.setMain(StandardTestDispatcher())
         databaseSource = FakeQuizResultListingDatabaseSource(resultListingEntities)
         networkSource = FakeQuizResultNetworkSource(resultDto)
         repository = QuizResultRepositoryImpl(databaseSource, networkSource)
+    }
+
+    @After
+    fun afterEach() {
+        Dispatchers.resetMain()
     }
 
     @Test
@@ -175,7 +182,8 @@ class QuizResultRepositoryTest {
         val results = databaseSource.getAllByQuiz(quiz.value)
         assertThat(
             results.map { QuizResultListing.fromEntity(it) },
-            containsInAnyOrder(*resultListingDto.filter{ it.quiz == quiz.value }.map { QuizResultListing.fromDto(it) }
+            containsInAnyOrder(*resultListingDto.filter { it.quiz == quiz.value }
+                .map { QuizResultListing.fromDto(it) }
                 .toTypedArray())
         )
     }

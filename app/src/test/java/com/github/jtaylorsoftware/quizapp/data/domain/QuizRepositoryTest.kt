@@ -11,16 +11,17 @@ import com.github.jtaylorsoftware.quizapp.data.network.NetworkResult
 import com.github.jtaylorsoftware.quizapp.data.network.dto.ApiError
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizDto
 import com.github.jtaylorsoftware.quizapp.matchers.SameQuizValidationErrorAs
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.*
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.hamcrest.Matchers.hasSize
 import org.hamcrest.core.IsInstanceOf
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.io.IOException
@@ -51,11 +52,16 @@ class QuizRepositoryTest {
 
     @Before
     fun beforeEach() {
+        Dispatchers.setMain(StandardTestDispatcher())
         databaseSource = FakeQuizListingDatabaseSource(quizEntities)
         networkSource = FakeQuizNetworkSource(quizDto)
         repository = QuizRepositoryImpl(databaseSource, networkSource)
     }
 
+    @After
+    fun afterEach() {
+        Dispatchers.resetMain()
+    }
 
     @Test
     fun `getQuiz should always return network Quiz`() = runTest {
@@ -139,9 +145,22 @@ class QuizRepositoryTest {
         // Should succeed with id
         val id = (result as Result.Success).value
 
-        // Should be able to get same back now
-        val quizResult = repository.getQuiz(id)
-        assertThat(quizResult, IsInstanceOf(Result.Success::class.java))
+        // Should be able to get same back now from repository
+        val quiz = repository.getQuiz(id)
+        assertThat(quiz, IsInstanceOf(Result.Success::class.java))
+    }
+
+    @Test
+    fun `createQuiz saves a listing locally for the successfully created quiz`() = runTest {
+        val quiz = Quiz()
+        val result = repository.createQuiz(quiz)
+
+        // Should succeed with id
+        val id = (result as Result.Success).value
+
+        // Should be able to get listing back from database using returned id from network
+        val quizListing = databaseSource.getById(id.value)
+        assertThat(quizListing!!.date, `is`(quiz.date.toString()))
     }
 
     @Test
@@ -186,6 +205,18 @@ class QuizRepositoryTest {
 
         // Should succeed with Unit
         assertThat(result, IsInstanceOf(Result.Success::class.java))
+    }
+
+    @Test
+    fun `editQuiz should cache updated listing when successfully editing quiz`() = runTest {
+        // Use a new Quiz as the "edits" - realistically the id should never be modified, the
+        // id comes from the response from createQuiz (which is attached to a Quiz/QuizListing saved locally)
+        val edits = Quiz(id = ObjectId("123"))
+        repository.editQuiz(ids[0], edits)
+
+        // Should be able to get updated listing back from database
+        val quizListing = databaseSource.getById(edits.id.value)
+        assertThat(quizListing!!.date, `is`(edits.date.toString()))
     }
 
     @Test

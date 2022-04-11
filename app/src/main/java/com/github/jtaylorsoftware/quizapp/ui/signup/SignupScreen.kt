@@ -1,4 +1,4 @@
-package com.github.jtaylorsoftware.quizapp.ui.register
+package com.github.jtaylorsoftware.quizapp.ui.signup
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -7,6 +7,7 @@ import androidx.compose.material.Button
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import com.github.jtaylorsoftware.quizapp.ui.components.EmailField
 import com.github.jtaylorsoftware.quizapp.ui.components.PasswordField
 import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
 import com.github.jtaylorsoftware.quizapp.ui.components.UsernameField
@@ -22,11 +23,13 @@ import com.github.jtaylorsoftware.quizapp.ui.components.UsernameField
  * @param navigateToLogin Callback invoked when the user presses the "Sign In" text. Secondary action on the screen.
  */
 @Composable
-fun RegisterScreen(
+fun SignupScreen(
     usernameState: TextFieldState,
     onUsernameChanged: (String) -> Unit,
     passwordState: TextFieldState,
     onPasswordChanged: (String) -> Unit,
+    emailState: TextFieldState,
+    onEmailChanged: (String) -> Unit,
     register: () -> Unit,
     navigateToLogin: () -> Unit,
 ) {
@@ -40,6 +43,7 @@ fun RegisterScreen(
 
     Column {
         UsernameField(state = usernameState, onValueChange = onUsernameChanged, hint = "Username")
+        EmailField(state = emailState, onValueChange = onEmailChanged, hint = "Email")
         PasswordField(state = passwordState, onValueChange = onPasswordChanged, hint = "Password")
         PasswordField(
             state = confirmPasswordState,

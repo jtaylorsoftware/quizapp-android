@@ -1,149 +1,95 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.Button
+import androidx.compose.material.Card
 import androidx.compose.material.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import com.github.jtaylorsoftware.quizapp.ui.components.EmailField
-import com.github.jtaylorsoftware.quizapp.ui.components.PasswordField
-import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
+import com.github.jtaylorsoftware.quizapp.data.domain.models.User
+import com.github.jtaylorsoftware.quizapp.util.toLocalizedString
 
 /**
- * ProfileScreen displays a user's information and provides forms to update
- * their profile data.
+ * Displays a [User]'s non-sensitive data, such as username,
+ * the number of quizzes, and the number of results.
  *
- * @param email The user's current email before any changes.
- * @param emailState State containing any changes to the email.
- * @param onChangeEmail Callback invoked when user inputs text in the form.
- * @param passwordState The state for the to-be-submitted password that can be error checked
- *                      according to business logic.
- * @param onChangePassword Callback invoked when the first password input changes.
- * @param onSubmitPassword Callback invoked when the user presses "Submit" in the Password form.
- * @param onSubmitEmail Callback invoked when the user presses "Submit" in the Email form.
+ * @param user User to read data from.
+ * @param navigateToProfileEditor Callback invoked when user presses an "Edit Profile" button.
  */
 @Composable
 fun ProfileScreen(
-    email: String,
-    emailState: TextFieldState,
-    onChangeEmail: (String) -> Unit,
-    passwordState: TextFieldState,
-    onChangePassword: (String) -> Unit,
-    onSubmitEmail: () -> Unit,
-    onSubmitPassword: () -> Unit,
+    user: User,
+    navigateToQuizScreen: () ->  Unit,
+    navigateToResultScreen: () -> Unit,
+    navigateToProfileEditor: () -> Unit
 ) {
     Column {
-        Text("Edit Profile")
-        EmailForm(email, emailState, onChangeEmail, onSubmitEmail)
-        PasswordForm(passwordState, onChangePassword, onSubmitPassword)
-        Text("Account deletion available when signed into the web app.")
+        ProfileCard(user, navigateToProfileEditor)
+        Spacer(modifier = Modifier.fillMaxWidth())
+        ListDescriptionCard(
+            list = user.quizzes,
+            action = "You've created",
+            singular = "quiz",
+            plural = "quizzes",
+            onButtonClick = navigateToQuizScreen
+        )
+        Spacer(modifier = Modifier.fillMaxWidth())
+        ListDescriptionCard(
+            list = user.results,
+            action = "You have",
+            singular = "result",
+            plural = "results",
+            onButtonClick = navigateToResultScreen
+        )
     }
 }
 
 /**
- * Displays the user's current email, with a button to open a form to change the email.
+ * A card displaying a brief summary of a [User]'s non-sensitive data, and
+ * a button that represents a navigation action to a profile editing screen.
  *
- * @param email The user's current email before any changes.
- * @param emailState State containing any changes to the email.
- * @param onChangeEmail Callback invoked when user inputs text in the form.
- * @param onSubmitEmail Callback invoked when user wants to submit their changes.
+ * @param user User to read data from.
+ * @param navigateToProfileScreen Callback invoked when "Edit Profile" button is pressed.
  */
 @Composable
-private fun EmailForm(
-    email: String,
-    emailState: TextFieldState,
-    onChangeEmail: (String) -> Unit,
-    onSubmitEmail: () -> Unit
-) {
-    var open: Boolean by remember { mutableStateOf(false) }
-
-    // Swap between Text and TextField depending on if user has clicked "Change"
-    if (open) {
-        EmailField(state = emailState, onValueChange = onChangeEmail)
-
-        Row {
-            Button(onClick = { open = false }, modifier = Modifier.semantics {
-                contentDescription = "Cancel email changes"
-            }) {
-                Text("Cancel")
+private fun ProfileCard(user: User, navigateToProfileScreen: () -> Unit) {
+    Card {
+        Column {
+            Text("Hello, ${user.username}")
+            Text("Email: ${user.email}")
+            Text("Joined: ${user.date.toLocalizedString()}")
+            Button(onClick = navigateToProfileScreen) {
+                Text("Edit Profile")
             }
-            Button(onClick = onSubmitEmail, modifier = Modifier.semantics {
-                contentDescription = "Submit email changes"
-            }) {
-                Text("Submit")
-            }
-        }
-    } else {
-        Text("Email: $email")
-        Button(onClick = { open = true }, modifier = Modifier.semantics {
-            contentDescription = "Open email form"
-        }) {
-            Text("Change Email")
         }
     }
 }
 
 /**
- * Displays a form for the user to input a new password. The first input password
- * is error checked externally, whereas the confirmation password only checks itself
- * against the first password.
+ * A card displaying the description of a list, such as "You've created 1 quiz,"
+ * and a button to view details. The button always takes the form "View `$noun`".
+ * The form of the noun rendered varies depending on the length of [list].
  *
- * @param passwordState The state for the to-be-submitted password that can be error checked
- *                      according to business logic.
- * @param onChangePassword Callback invoked when the first password input changes.
- * @param onSubmitPassword Callback invoked when the user presses "Submit."
+ * @param list The list to compute noun form from.
+ * @param action The action in relation to the noun, such as "You've created."
+ * @param singular The singular form of the noun.
+ * @param plural The plural form of the noun.
  */
 @Composable
-private fun PasswordForm(
-    passwordState: TextFieldState,
-    onChangePassword: (String) -> Unit,
-    onSubmitPassword: () -> Unit
-) {
-    var open: Boolean by remember { mutableStateOf(false) }
-
-    var confirmPasswordState by remember { mutableStateOf(TextFieldState()) }
-    val onConfirmPasswordChanged = { confirmPassword: String ->
-        val error = if (confirmPassword != passwordState.text) {
-            "Passwords do not match."
-        } else null
-        confirmPasswordState = TextFieldState(text = confirmPassword, error = error, dirty = true)
-    }
-
-    // Swap between Button and dual-TextField form depending on if user has clicked "Change"
-    if (open) {
-        PasswordField(
-            state = passwordState,
-            onValueChange = onChangePassword,
-            hint = "Password"
-        )
-
-        PasswordField(
-            state = confirmPasswordState,
-            onValueChange = onConfirmPasswordChanged,
-            fieldContentDescription = "Confirm password",
-            hint = "Confirm password hint",
-            hintContentDescription = "Confirm password hint",
-        )
-        Row {
-            Button(onClick = { open = false }, modifier = Modifier.semantics {
-                contentDescription = "Cancel password changes"
-            }) {
-                Text("Cancel")
+private fun ListDescriptionCard(list: List<Any>, action: String, singular: String, plural: String, onButtonClick: () -> Unit) {
+    val noun: String by remember { derivedStateOf { if (list.size == 1) singular else plural } }
+    val capitalizedNoun: String by remember { derivedStateOf { noun.replaceFirstChar { it.uppercase() } } }
+    Card {
+        Column {
+            Text("$action ${list.size} $noun.")
+            Button(onClick = onButtonClick) {
+                Text("View $capitalizedNoun")
             }
-            Button(onClick = onSubmitPassword, modifier = Modifier.semantics {
-                contentDescription = "Submit password changes"
-            }) {
-                Text("Submit")
-            }
-        }
-    } else {
-        Button(onClick = { open = true }, modifier = Modifier.semantics {
-            contentDescription = "Open password form"
-        }) {
-            Text("Change Password")
         }
     }
 }

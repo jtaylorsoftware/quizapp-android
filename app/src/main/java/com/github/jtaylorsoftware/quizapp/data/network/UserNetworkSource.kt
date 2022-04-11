@@ -73,25 +73,3 @@ interface UserService: UserNetworkSource {
     @PUT("users/me/password")
     override suspend fun changePassword(password: String): NetworkResult<Unit>
 }
-//
-//class UserNetworkSourceImpl @Inject constructor(
-//    private val service: UserService
-//) : UserNetworkSource {
-//    override suspend fun registerUser(registration: UserRegistrationDto): NetworkResult<AuthToken> =
-//        service.registerUser(registration)
-//
-//    override suspend fun signInUser(userCredentials: UserCredentialsDto): NetworkResult<AuthToken> =
-//        service.signInUser(userCredentials)
-//
-//    override suspend fun getProfile(): NetworkResult<UserDto> = service.getProfile()
-//
-//    override suspend fun getQuizzes(): NetworkResult<List<QuizListingDto>> = service.getQuizzes()
-//
-//    override suspend fun getResults(): NetworkResult<List<ResultListingDto>> = service.getResults()
-//
-//    override suspend fun changeEmail(email: String): NetworkResult<Unit> =
-//        service.changeEmail(email)
-//
-//    override suspend fun changePassword(password: String): NetworkResult<Unit> =
-//        service.changePassword(password)
-//}

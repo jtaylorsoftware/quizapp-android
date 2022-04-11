@@ -16,7 +16,7 @@ import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuestionResponse
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
 import com.github.jtaylorsoftware.quizapp.ui.quiz.QuizFormScreen
-import com.github.jtaylorsoftware.quizapp.ui.quiz.ResponseState
+import com.github.jtaylorsoftware.quizapp.ui.quiz.FormResponseState
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
 
 class MainActivity : ComponentActivity() {
@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
         questions = questions,
     )
 
-    private lateinit var responses: SnapshotStateList<ResponseState>
+    private lateinit var responses: SnapshotStateList<FormResponseState>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,15 +55,15 @@ class MainActivity : ComponentActivity() {
         questions.forEach {
             when (it) {
                 is Question.MultipleChoice -> {
-                    responses.add(ResponseState(QuestionResponse.MultipleChoice(choice = -1)))
+                    responses.add(FormResponseState(QuestionResponse.MultipleChoice(choice = -1)))
                 }
                 is Question.FillIn -> {
-                    responses.add(ResponseState(QuestionResponse.FillIn()))
+                    responses.add(FormResponseState(QuestionResponse.FillIn()))
                 }
                 else -> throw IllegalArgumentException()
             }
         }
-        val changeResponse: (Int, ResponseState) -> Unit = { i, r ->
+        val changeResponse: (Int, FormResponseState) -> Unit = { i, r ->
             responses[i] = r
         }
         setContent {

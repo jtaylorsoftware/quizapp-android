@@ -6,12 +6,17 @@ import com.github.jtaylorsoftware.quizapp.data.local.FakeUserCache
 import com.github.jtaylorsoftware.quizapp.data.network.FakeUserNetworkSource
 import com.github.jtaylorsoftware.quizapp.data.network.NetworkResult
 import com.github.jtaylorsoftware.quizapp.data.network.dto.ApiError
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.hamcrest.Matchers.notNullValue
 import org.hamcrest.core.IsInstanceOf
+import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
@@ -23,9 +28,15 @@ class UserAuthServiceTest {
 
     @Before
     fun beforeEach() {
+        Dispatchers.setMain(StandardTestDispatcher())
         cache = FakeUserCache()
         networkSource = FakeUserNetworkSource()
         service = UserAuthServiceImpl(cache, networkSource)
+    }
+
+    @After
+    fun afterEach(){
+        Dispatchers.resetMain()
     }
 
     @Test

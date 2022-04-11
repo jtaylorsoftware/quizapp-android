@@ -10,6 +10,8 @@ import com.github.jtaylorsoftware.quizapp.data.network.NetworkResult
 import com.github.jtaylorsoftware.quizapp.data.network.QuizResultNetworkSource
 import com.github.jtaylorsoftware.quizapp.data.network.dto.ApiError
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizFormResponsesDto
+import com.github.jtaylorsoftware.quizapp.di.AppMainScope
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import java.net.HttpURLConnection.*
@@ -74,7 +76,8 @@ data class ResponseValidationErrors(
 
 class QuizResultRepositoryImpl @Inject constructor(
     private val databaseSource: QuizResultListingDatabaseSource,
-    private val networkSource: QuizResultNetworkSource
+    private val networkSource: QuizResultNetworkSource,
+    @AppMainScope private val externalScope: CoroutineScope = MainScope()
 ) : QuizResultRepository {
     override suspend fun getForQuizByUser(
         quiz: ObjectId,
@@ -131,7 +134,11 @@ class QuizResultRepositoryImpl @Inject constructor(
                 networkSource.getAllListingForQuiz(quiz.value)) {
                 is NetworkResult.Success -> {
                     val listings = networkResult.value.let { dtoListings ->
-                        databaseSource.insertAll(dtoListings.map { QuizResultListingEntity.fromDto(it) })
+                        databaseSource.insertAll(dtoListings.map {
+                            QuizResultListingEntity.fromDto(
+                                it
+                            )
+                        })
                         dtoListings.map { QuizResultListing.fromDto(it) }
                     }
                     Result.success(listings)
@@ -147,17 +154,21 @@ class QuizResultRepositoryImpl @Inject constructor(
         responses: List<QuestionResponse>,
         quiz: ObjectId
     ): Result<ObjectId, ResponseValidationErrors> =
-        when (val result = networkSource.createResultForQuiz(
-            QuizFormResponsesDto.fromDomain(responses),
-            quiz.value
-        )) {
+        when (val result = withContext(externalScope.coroutineContext + NonCancellable) {
+            networkSource.createResultForQuiz(
+                QuizFormResponsesDto.fromDomain(responses), quiz.value
+            )
+        }) {
             is NetworkResult.Success -> Result.success(ObjectId(result.value.id))
             is NetworkResult.HttpError -> handleResponseHttpError(result, responses.size)
             is NetworkResult.NetworkError -> Result.NetworkError
             else -> Result.UnknownError
         }
 
-    private fun <T> handleResponseHttpError(httpError: NetworkResult.HttpError, numAnswers: Int): Result<T, ResponseValidationErrors> =
+    private suspend fun <T> handleResponseHttpError(
+        httpError: NetworkResult.HttpError,
+        numAnswers: Int
+    ): Result<T, ResponseValidationErrors> =
         when (httpError.code) {
             HTTP_BAD_REQUEST, HTTP_FORBIDDEN -> {
                 val errors = parseApiErrors(httpError.errors, numAnswers)
@@ -180,13 +191,14 @@ class QuizResultRepositoryImpl @Inject constructor(
             else -> Result.NetworkError
         }
 
-    private fun parseApiErrors(
+    private suspend fun parseApiErrors(
         apiErrors: List<ApiError>,
         numAnswers: Int
     ): ResponseValidationErrors {
         val answerErrors = MutableList<String?>(numAnswers) { null }
         var errors = ResponseValidationErrors(answerErrors = answerErrors)
         apiErrors.forEach { err ->
+            yield()
             when (err.field) {
                 "expiration" -> {
                     errors = errors.copy(expired = true)

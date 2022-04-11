@@ -48,12 +48,6 @@ import java.time.format.FormatStyle
  * immutable in editing mode.
  *
  * @param quizState The basic data for a Quiz, such as the expiration and title.
- * @param questions The questions in the Quiz.
- * @param onChangeQuizState Called when modifying one or more properties of [quizState].
- * @param onAddQuestion Callback invoked to add a [new question][QuestionState.Empty()] to the Quiz.
- * @param onChangeQuestionType Called to change the type of a question to something other than [Empty][QuestionState.Empty()].
- * @param onEditQuestion Function invoked to modify Question prompt or its answers.
- * @param onDeleteQuestion Called when deleting a specific Question.
  * @param onSubmit Called when submitting the Quiz.
  * @param isEditing Flag controlling mutability of the current Quiz.
  */
@@ -61,12 +55,6 @@ import java.time.format.FormatStyle
 @Composable
 fun QuizEditorScreen(
     quizState: QuizState,
-    questions: List<QuestionState>,
-    onChangeQuizState: (QuizState) -> Unit,
-    onAddQuestion: () -> Unit,
-    onChangeQuestionType: (Int, QuestionType) -> Unit,
-    onEditQuestion: (Int, QuestionState) -> Unit,
-    onDeleteQuestion: (Int) -> Unit,
     onSubmit: () -> Unit,
     isEditing: Boolean = false,
 ) {
@@ -100,7 +88,7 @@ fun QuizEditorScreen(
                         coroutineScope.launch {
                             listState.scrollToItem(listState.layoutInfo.totalItemsCount)
                         }
-                        onAddQuestion()
+                        quizState.addQuestion()
                     }) {
                         Icon(Icons.Default.Add, "Add question")
                     }
@@ -122,7 +110,7 @@ fun QuizEditorScreen(
         ) {
             // Basic Quiz data
             item {
-                QuizHeader(quizState = quizState, onChangeQuizState = onChangeQuizState)
+                QuizHeader(quizState = quizState)
             }
 
             item {
@@ -130,7 +118,7 @@ fun QuizEditorScreen(
             }
 
             // List of editable questions
-            itemsIndexed(questions, key = { _, q -> q.key }) { index, questionState ->
+            itemsIndexed(quizState.questions, key = { _, q -> q.key }) { index, questionState ->
                 // Display the index and delete button separately for clarity
                 Row {
                     Text("Question ${index + 1}:")
@@ -138,7 +126,7 @@ fun QuizEditorScreen(
                         IconButton(onClick = {
                             focusManager.clearFocus()
                             keyboardController?.hide()
-                            onDeleteQuestion(index)
+                            quizState.deleteQuestion(index)
                         }) {
                             Icon(Icons.Default.Delete, "Delete question")
                         }
@@ -148,10 +136,10 @@ fun QuizEditorScreen(
                     QuestionEditor(
                         questionState,
                         onChangeQuestionType = {
-                            onChangeQuestionType(index, it)
+                            quizState.changeQuestionType(index, it)
                         },
                         onEditQuestion = {
-                            onEditQuestion(index, it)
+                            quizState.changeQuestion(index, it)
                         },
                         isEditing = isEditing
                     )
@@ -179,24 +167,19 @@ fun QuizEditorScreenPreview() {
     val questionState = questions.map {
         when (it) {
             is Question.MultipleChoice -> QuestionState.MultipleChoice(
-                question = it,
+                data = it,
                 answerErrors = listOf(null, null)
             )
-            is Question.FillIn -> QuestionState.FillIn(question = it)
+            is Question.FillIn -> QuestionState.FillIn(data = it)
             else -> QuestionState.Empty()
         }
     }
 
     QuizAppTheme {
         QuizEditorScreen(
-            quizState = QuizState(title = TextFieldState("My Quiz"), isPublic = false),
-            questions = questionState,
-            onChangeQuizState = {},
-            onAddQuestion = { /*TODO*/ },
-            onChangeQuestionType = { _, _ -> },
-            onEditQuestion = { _, _ -> },
-            onDeleteQuestion = {},
-            onSubmit = {})
+            quizState = PreviewQuizState(title = TextFieldState("My Quiz"), isPublic = false),
+            onSubmit = {}
+        )
     }
 }
 
@@ -204,27 +187,25 @@ fun QuizEditorScreenPreview() {
  * Displays editable fields for basic Quiz data, including title, allowedUsers, and expiration.
  */
 @Composable
-private fun QuizHeader(quizState: QuizState, onChangeQuizState: (QuizState) -> Unit) {
+private fun QuizHeader(quizState: QuizState) {
     Card {
         Column {
             QuizTitle(
                 title = quizState.title,
                 onTitleChange = {
-                    onChangeQuizState(
-                        quizState.copy(title = quizState.title.copy(text = it))
-                    )
+                    quizState.setTitle(it)
                 }
             )
             AllowedUsers(
                 isPublic = quizState.isPublic,
-                onChangeIsPublic = { onChangeQuizState(quizState.copy(isPublic = it)) },
+                onChangeIsPublic = { quizState.isPublic = it },
                 allowedUsers = quizState.allowedUsers,
-                onChangeAllowedUsers = { onChangeQuizState(quizState.copy(allowedUsers = it)) },
+                onChangeAllowedUsers = { quizState.allowedUsers = it },
                 allowedUsersError = quizState.allowedUsersError
             )
             Expiration(
                 expiration = quizState.expiration,
-                changeExpiration = { onChangeQuizState(quizState.copy(expiration = it)) },
+                changeExpiration = { quizState.expiration = it },
                 expirationError = quizState.expirationError
             )
         }
@@ -385,7 +366,7 @@ private fun QuestionEditor(
             is QuestionState.Empty -> {}
             is QuestionState.MultipleChoice -> {
                 MultipleChoiceQuestion(
-                    question = questionState.question,
+                    question = questionState.data,
                     questionTextError = questionState.questionTextError,
                     answerErrors = questionState.answerErrors,
                     isEditing = isEditing,
@@ -400,8 +381,9 @@ private fun QuestionEditor(
             }
             is QuestionState.FillIn -> {
                 FillInQuestion(
-                    question = questionState.question,
-                    onEditQuestion = { onEditQuestion(questionState.copy(question = it)) },
+                    question = questionState.data,
+                    onChangePrompt = { onEditQuestion(questionState.changeText(it)) },
+                    onChangeCorrectAnswer = { onEditQuestion(questionState.changeCorrectAnswer(it)) },
                     questionTextError = questionState.questionTextError,
                     answerError = questionState.correctAnswerError,
                     isEditing = isEditing
@@ -463,7 +445,7 @@ private fun QuestionTypeSelector(
     questionState: QuestionState,
     onSelectType: (QuestionType) -> Unit,
 ) {
-    val selectedType = questionState.question.type
+    val selectedType = questionState.data.type
     Row {
         Text("Question type:")
 
@@ -683,13 +665,14 @@ private fun FillInQuestion(
     question: Question.FillIn,
     questionTextError: String?,
     answerError: String?,
-    onEditQuestion: (Question.FillIn) -> Unit,
+    onChangePrompt: (String) -> Unit,
+    onChangeCorrectAnswer: (String) -> Unit,
     isEditing: Boolean,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     TextField(
         value = question.text,
-        onValueChange = { onEditQuestion(question.copy(text = it)) },
+        onValueChange = { onChangePrompt(it) },
         label = {
             Text("Question prompt")
         },
@@ -703,14 +686,16 @@ private fun FillInQuestion(
         })
     }
 
-    TextField(value = question.correctAnswer ?: "", onValueChange = {
-        onEditQuestion(question.copy(correctAnswer = it))
-    }, label = {
-        Text("Correct answer")
-    }, modifier = Modifier
-        .semantics {
-            contentDescription = "Change correct answer text"
-        }, enabled = !isEditing,
+    TextField(
+        value = question.correctAnswer ?: "",
+        onValueChange = onChangeCorrectAnswer,
+        label = {
+            Text("Correct answer")
+        },
+        modifier = Modifier
+            .semantics {
+                contentDescription = "Change correct answer text"
+            }, enabled = !isEditing,
         isError = answerError != null,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
@@ -731,7 +716,8 @@ private fun FillInQuestionPreview() {
                 question = Question.FillIn("Fill In", "Correct Answer"),
                 questionTextError = "Text error",
                 answerError = "Answer error",
-                onEditQuestion = {},
+                onChangePrompt = {},
+                onChangeCorrectAnswer = {},
                 isEditing = false
             )
         }

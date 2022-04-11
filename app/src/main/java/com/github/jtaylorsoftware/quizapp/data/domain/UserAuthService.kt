@@ -8,6 +8,8 @@ import com.github.jtaylorsoftware.quizapp.data.network.UserNetworkSource
 import com.github.jtaylorsoftware.quizapp.data.network.dto.ApiError
 import com.github.jtaylorsoftware.quizapp.data.network.dto.UserCredentialsDto
 import com.github.jtaylorsoftware.quizapp.data.network.dto.UserRegistrationDto
+import com.github.jtaylorsoftware.quizapp.di.AppMainScope
+import kotlinx.coroutines.*
 import java.net.HttpURLConnection.*
 import javax.inject.Inject
 
@@ -61,6 +63,7 @@ data class UserCredentialErrors(
 class UserAuthServiceImpl @Inject constructor(
     private val cache: UserCache,
     private val networkSource: UserNetworkSource,
+    @AppMainScope private val externalScope: CoroutineScope = MainScope()
 ) : UserAuthService {
 
     override fun userIsSignedIn(): Result<Boolean, Nothing> = cache.loadToken()?.let {
@@ -68,48 +71,59 @@ class UserAuthServiceImpl @Inject constructor(
     } ?: Result.success(false)
 
     override suspend fun registerUser(registration: UserRegistration): Result<Unit, UserRegistrationErrors> =
-        when (val result =
-            networkSource.registerUser(UserRegistrationDto.fromDomain(registration))) {
-            is NetworkResult.Success -> {
-                cache.saveToken(result.value.token)
-                Result.success()
-            }
-            is NetworkResult.HttpError -> {
-                when (result.code) {
-                    HTTP_BAD_REQUEST -> {
-                        val validationError = parseRegistrationErrors(result.errors)
-                        Result.BadRequest(validationError)
-                    }
-                    HTTP_CONFLICT -> {
-                        val validationError = parseRegistrationErrors(result.errors)
-                        Result.Conflict(validationError)
-                    }
-                    else -> Result.UnknownError
+        // Need to handle both registration and reading the result in NonCancellable context so
+        // the token gets saved too
+        withContext(externalScope.coroutineContext + NonCancellable) {
+            when (val result =
+                networkSource.registerUser(UserRegistrationDto.fromDomain(registration))) {
+                is NetworkResult.Success -> {
+                    cache.saveToken(result.value.token)
+                    Result.success()
                 }
+                is NetworkResult.HttpError -> {
+                    when (result.code) {
+                        HTTP_BAD_REQUEST -> {
+                            val validationError = parseRegistrationErrors(result.errors)
+                            Result.BadRequest(validationError)
+                        }
+                        HTTP_CONFLICT -> {
+                            val validationError = parseRegistrationErrors(result.errors)
+                            Result.Conflict(validationError)
+                        }
+                        else -> Result.UnknownError
+                    }
+                }
+                else -> Result.NetworkError
             }
-            else -> Result.NetworkError
         }
 
     override suspend fun signInUser(credentials: UserCredentials): Result<Unit, UserCredentialErrors> =
-        when (val result = networkSource.signInUser(UserCredentialsDto.fromDomain(credentials))) {
-            is NetworkResult.Success -> {
-                cache.saveToken(result.value.token)
-                Result.success()
-            }
-            is NetworkResult.HttpError -> {
-                when (result.code) {
-                    HTTP_BAD_REQUEST -> {
-                        val validationError = parseCredentialErrors(result.errors)
-                        Result.BadRequest(validationError)
-                    }
-                    else -> Result.UnknownError
+        withContext(externalScope.coroutineContext + NonCancellable) {
+            when (val result =
+                networkSource.signInUser(UserCredentialsDto.fromDomain(credentials))) {
+                is NetworkResult.Success -> {
+                    cache.saveToken(result.value.token)
+                    Result.success()
                 }
+                is NetworkResult.HttpError -> {
+                    when (result.code) {
+                        HTTP_BAD_REQUEST -> {
+                            val validationError = parseCredentialErrors(result.errors)
+                            Result.BadRequest(validationError)
+                        }
+                        else -> Result.UnknownError
+                    }
+                }
+                else -> Result.NetworkError
             }
-            else -> Result.NetworkError
         }
 
     override suspend fun changeEmail(email: String): Result<Unit, String?> =
-        when (val result = networkSource.changeEmail(email)) {
+        // Only wrap the changeEmail in NonCancellable because reading the result isn't
+        // that important if we're cancelling (leaving screen)
+        when (val result = withContext(externalScope.coroutineContext + NonCancellable) {
+            networkSource.changeEmail(email)
+        }) {
             is NetworkResult.Success -> {
                 Result.success()
             }
@@ -131,7 +145,9 @@ class UserAuthServiceImpl @Inject constructor(
         }
 
     override suspend fun changePassword(password: String): Result<Unit, String?> =
-        when (val result = networkSource.changePassword(password)) {
+        when (val result = withContext(externalScope.coroutineContext + NonCancellable) {
+            networkSource.changePassword(password)
+        }) {
             is NetworkResult.Success -> {
                 Result.success()
             }
@@ -148,9 +164,10 @@ class UserAuthServiceImpl @Inject constructor(
             else -> Result.NetworkError
         }
 
-    private fun parseRegistrationErrors(apiErrors: List<ApiError>): UserRegistrationErrors {
+    private suspend fun parseRegistrationErrors(apiErrors: List<ApiError>): UserRegistrationErrors {
         var error = UserRegistrationErrors()
         apiErrors.forEach { err ->
+            yield()
             when (err.field) {
                 "username" -> {
                     error = error.copy(username = err.message)
@@ -166,9 +183,10 @@ class UserAuthServiceImpl @Inject constructor(
         return error
     }
 
-    private fun parseCredentialErrors(apiErrors: List<ApiError>): UserCredentialErrors {
+    private suspend fun parseCredentialErrors(apiErrors: List<ApiError>): UserCredentialErrors {
         var error = UserCredentialErrors()
         apiErrors.forEach { err ->
+            yield()
             when (err.field) {
                 "username" -> {
                     error = error.copy(username = err.message)
@@ -181,9 +199,10 @@ class UserAuthServiceImpl @Inject constructor(
         return error
     }
 
-    private fun parseSingleError(apiErrors: List<ApiError>, errorField: String): String? {
+    private suspend fun parseSingleError(apiErrors: List<ApiError>, errorField: String): String? {
         var error: String? = null
         apiErrors.forEach { err ->
+            yield()
             if (err.field == errorField) {
                 error = err.message
             }

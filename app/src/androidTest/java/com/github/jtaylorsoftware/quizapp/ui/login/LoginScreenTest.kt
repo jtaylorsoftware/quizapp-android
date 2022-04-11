@@ -99,7 +99,7 @@ class LoginScreenTest {
                     TextFieldState(error = null),
                     {},
                     login = {},
-                    navigateToRegister = register
+                    navigateToSignup = register
                 )
             }
         }

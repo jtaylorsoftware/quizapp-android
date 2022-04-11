@@ -29,7 +29,7 @@ import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
 
 /**
  * Renders a form for a user to respond to a quiz. The given [responses] should be
- * of the appropriate size, and each [ResponseState] should be the appropriate type
+ * of the appropriate size, and each [FormResponseState] should be the appropriate type
  * for its matching question of [quiz]. If either constraint is not met, [IllegalArgumentException]
  * will be thrown, potentially in the middle of rendering questions if the size constraint is met
  * but not the type constraint.
@@ -45,8 +45,8 @@ import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
 @Composable
 fun QuizFormScreen(
     quiz: QuizForm,
-    responses: List<ResponseState>,
-    onChangeResponse: (Int, ResponseState) -> Unit,
+    responses: List<FormResponseState>,
+    onChangeResponse: (Int, FormResponseState) -> Unit,
     onSubmit: () -> Unit,
 ) {
     require(quiz.questions.size == responses.size) {
@@ -115,8 +115,8 @@ private fun QuizHeader(title: String, createdBy: String, questionCount: Int) {
 private fun QuestionForm(
     index: Int,
     question: Question,
-    responseState: ResponseState,
-    onChangeResponse: (Int, ResponseState) -> Unit
+    responseState: FormResponseState,
+    onChangeResponse: (Int, FormResponseState) -> Unit
 ) {
     when (question) {
         is Question.Empty -> throw IllegalArgumentException("Cannot use Question.Empty in QuestionForm")

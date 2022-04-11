@@ -24,7 +24,7 @@ import com.github.jtaylorsoftware.quizapp.data.domain.models.*
  *                          It accepts the id of the selected listing.
  */
 @Composable
-fun ResultScreen(results: List<QuizResultListing>, navigateToDetails: (ObjectId) -> Unit) {
+fun QuizResultListScreen(results: List<QuizResultListing>, navigateToDetails: (ObjectId) -> Unit) {
     LazyColumn {
         item {
             Text("Your Quiz Results")
@@ -95,7 +95,8 @@ private fun GradedQuestion(index: Int, question: Question, gradedAnswer: GradedA
         is Question.MultipleChoice -> {
             check(gradedAnswer is GradedAnswer.MultipleChoice)
             GradedMultipleChoiceQuestion(index, question, gradedAnswer)
-        } else ->  throw IllegalArgumentException("Cannot display graded Empty Question")
+        }
+        else -> throw IllegalArgumentException("Cannot display graded Empty Question")
     }
 }
 

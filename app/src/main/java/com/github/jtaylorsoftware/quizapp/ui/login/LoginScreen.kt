@@ -20,7 +20,7 @@ import com.github.jtaylorsoftware.quizapp.ui.components.UsernameField
  * @param passwordState State containing the input password and state.
  * @param onPasswordChanged Callback invoked when the user inputs text to the "Password" field.
  * @param login Callback invoked when the user presses the "Sign In" button. Primary action on the screen.
- * @param navigateToRegister Callback invoked when the user presses the "Sign Up" text. Secondary action on the screen.
+ * @param navigateToSignup Callback invoked when the user presses the "Sign Up" text. Secondary action on the screen.
  */
 @Composable
 fun LoginScreen(
@@ -29,7 +29,7 @@ fun LoginScreen(
     passwordState: TextFieldState,
     onPasswordChanged: (String) -> Unit,
     login: () -> Unit,
-    navigateToRegister: () -> Unit
+    navigateToSignup: () -> Unit
 ) {
     Column {
         UsernameField(state = usernameState, onValueChange = onUsernameChanged, hint = "Username")
@@ -39,7 +39,7 @@ fun LoginScreen(
         }
         Row {
             Text("Not registered?")
-            Text("Sign Up", modifier = Modifier.clickable { navigateToRegister() })
+            Text("Sign Up", modifier = Modifier.clickable { navigateToSignup() })
         }
     }
 }

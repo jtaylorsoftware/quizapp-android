@@ -15,6 +15,7 @@ import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizListingDto
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizResultListingDto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.yield
 import java.net.HttpURLConnection.HTTP_UNAUTHORIZED
 import javax.inject.Inject
 
@@ -134,23 +135,25 @@ class UserRepositoryImpl @Inject constructor(
         emit(result)
     }
 
-    private fun convertQuizListingDto(
+    private suspend fun convertQuizListingDto(
         dto: List<QuizListingDto>,
         outEntities: MutableList<QuizListingEntity>,
         outListings: MutableList<QuizListing>
     ) {
         dto.forEach {
+            yield()
             outEntities += QuizListingEntity.fromDto(it)
             outListings += QuizListing.fromDto(it)
         }
     }
 
-    private fun convertResultListingDto(
+    private suspend fun convertResultListingDto(
         dto: List<QuizResultListingDto>,
         outEntities: MutableList<QuizResultListingEntity>,
         outListings: MutableList<QuizResultListing>
     ) {
         dto.forEach {
+            yield()
             outEntities += QuizResultListingEntity.fromDto(it)
             outListings += QuizResultListing.fromDto(it)
         }

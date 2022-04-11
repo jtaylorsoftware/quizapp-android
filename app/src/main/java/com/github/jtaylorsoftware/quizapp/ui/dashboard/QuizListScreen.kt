@@ -40,7 +40,7 @@ import java.time.Instant
  *                          accept the `id` of the Quiz to view the results of.
  */
 @Composable
-fun QuizScreen(
+fun QuizListScreen(
     quizzes: List<QuizListing>,
     onDeleteQuiz: (ObjectId) -> Unit,
     navigateToEditor: (ObjectId) -> Unit,

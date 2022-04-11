@@ -32,6 +32,18 @@ class FakeQuizResultListingDatabaseSource(
         listings.forEach { cache[it.id] = it }
     }
 
+    override suspend fun deleteByQuizAndUser(quiz: String, user: String) {
+        cache.entries.removeAll { (_, it) -> it.id == quiz && it.user == user }
+    }
+
+    override suspend fun deleteAllByQuiz(quiz: String) {
+        cache.entries.removeAll { (_, it) -> it.id == quiz }
+    }
+
+    override suspend fun deleteAllByUser(user: String) {
+        cache.entries.removeAll { (_, it) -> it.user == user }
+    }
+
     override suspend fun deleteAll() {
         cache.clear()
     }

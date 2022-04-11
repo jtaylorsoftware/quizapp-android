@@ -78,6 +78,8 @@ data class QuizListing(
 
     /**
      * The id of the user that created the [Quiz] associated with this listing.
+     * (For now, the v2 API returns this as an ID because only the current user
+     * can see only their own created quizzes.)
      */
     val createdBy: ObjectId = ObjectId(),
 
@@ -116,6 +118,17 @@ data class QuizListing(
             isPublic = entity.isPublic,
             resultsCount = entity.resultsCount,
             questionCount = entity.questionCount
+        )
+
+        fun fromQuiz(quiz: Quiz) = QuizListing(
+            id = quiz.id,
+            date = quiz.date,
+            createdBy = quiz.createdBy,
+            title = quiz.title,
+            expiration = quiz.expiration,
+            isPublic = quiz.isPublic,
+            resultsCount = quiz.results.size,
+            questionCount = quiz.questions.size,
         )
     }
 }

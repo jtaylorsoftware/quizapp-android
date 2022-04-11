@@ -74,27 +74,3 @@ interface QuizResultService : QuizResultNetworkSource {
         @Query("quiz") quiz: String
     ): NetworkResult<ObjectIdResponse>
 }
-//
-//class ResultNetworkSourceImpl @Inject constructor(
-//    private val service: ResultService
-//) : ResultNetworkSource {
-//    override suspend fun getForQuizByUser(
-//        quiz: String,
-//        user: String
-//    ): NetworkResult<ResultDto> = service.getForQuizByUser(quiz, user)
-//
-//
-//    override suspend fun getAllForQuiz(quiz: String): NetworkResult<List<ResultDto>> = service.getAllForQuiz(quiz)
-//
-//    override suspend fun getListingForQuizByUser(
-//        quiz: String,
-//        user: String
-//    ): NetworkResult<ResultListingDto> = service.getListingForQuizByUser(quiz, user)
-//
-//    override suspend fun getAllListingForQuiz(quiz: String): NetworkResult<List<ResultListingDto>> = service.getAllListingForQuiz(quiz)
-//
-//    override suspend fun createResultForQuiz(
-//        responses: QuizFormResponsesDto,
-//        quiz: String
-//    ): NetworkResult<ObjectIdResponse> = service.createResultForQuiz(responses, quiz)
-//}

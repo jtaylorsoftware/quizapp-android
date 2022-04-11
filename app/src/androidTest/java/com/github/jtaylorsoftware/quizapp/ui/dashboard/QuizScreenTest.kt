@@ -55,7 +55,7 @@ class QuizScreenTest {
     fun shouldDisplayHeader() {
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizScreen(quizzes, {}, {}, {})
+                QuizListScreen(quizzes, {}, {}, {})
             }
         }
 
@@ -66,7 +66,7 @@ class QuizScreenTest {
     fun displaysEachQuizListing() {
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizScreen(quizzes, {}, {}, {})
+                QuizListScreen(quizzes, {}, {}, {})
             }
         }
 
@@ -88,7 +88,7 @@ class QuizScreenTest {
     fun whenQuizExpired_showsText() {
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizScreen(quizzes.subList(0, 1), {}, {}, {})
+                QuizListScreen(quizzes.subList(0, 1), {}, {}, {})
             }
         }
 
@@ -99,7 +99,7 @@ class QuizScreenTest {
     fun whenQuizNotExpired_doesNotShowExpiredText() {
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizScreen(quizzes.subList(1, 2), {}, {}, {})
+                QuizListScreen(quizzes.subList(1, 2), {}, {}, {})
             }
         }
 
@@ -110,7 +110,7 @@ class QuizScreenTest {
     fun whenQuizCreatedDaysAgo_displaysCreatedDaysAgo() {
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizScreen(quizzes.subList(0, 1), {}, {}, {})
+                QuizListScreen(quizzes.subList(0, 1), {}, {}, {})
             }
         }
 
@@ -122,7 +122,7 @@ class QuizScreenTest {
     fun whenQuizCreatedMonthsAgo_displaysCreatedMonthsAgo() {
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizScreen(quizzes.subList(1, 2), {}, {}, {})
+                QuizListScreen(quizzes.subList(1, 2), {}, {}, {})
             }
         }
 
@@ -134,7 +134,7 @@ class QuizScreenTest {
     fun whenQuizCreatedYearsAgo_displaysCreatedYearsAgo() {
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizScreen(quizzes.subList(2, 3), {}, {}, {})
+                QuizListScreen(quizzes.subList(2, 3), {}, {}, {})
             }
         }
 
@@ -151,7 +151,7 @@ class QuizScreenTest {
 
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizScreen(quizzes.subList(0, 1), onDeleteQuiz = onDeleteQuiz, {}, {})
+                QuizListScreen(quizzes.subList(0, 1), onDeleteQuiz = onDeleteQuiz, {}, {})
             }
         }
 
@@ -170,7 +170,7 @@ class QuizScreenTest {
 
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizScreen(quizzes.subList(0, 1), {}, navigateToEditor = navigateToEditor, {})
+                QuizListScreen(quizzes.subList(0, 1), {}, navigateToEditor = navigateToEditor, {})
             }
         }
 
@@ -189,7 +189,7 @@ class QuizScreenTest {
 
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizScreen(quizzes.subList(0, 1), {}, {}, navigateToResults = navigateToResults)
+                QuizListScreen(quizzes.subList(0, 1), {}, {}, navigateToResults = navigateToResults)
             }
         }
 

@@ -10,6 +10,8 @@ import com.github.jtaylorsoftware.quizapp.data.network.NetworkResult
 import com.github.jtaylorsoftware.quizapp.data.network.QuizNetworkSource
 import com.github.jtaylorsoftware.quizapp.data.network.dto.ApiError
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizDto
+import com.github.jtaylorsoftware.quizapp.di.AppMainScope
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import java.net.HttpURLConnection.*
@@ -71,7 +73,8 @@ data class QuizValidationErrors(
 
 class QuizRepositoryImpl @Inject constructor(
     private val databaseSource: QuizListingDatabaseSource,
-    private val networkSource: QuizNetworkSource
+    private val networkSource: QuizNetworkSource,
+    @AppMainScope private val externalScope: CoroutineScope = MainScope()
 ) : QuizRepository {
     override suspend fun getQuiz(id: ObjectId): Result<Quiz, Any?> =
         when (val result = networkSource.getById(id.value)) {
@@ -114,18 +117,32 @@ class QuizRepositoryImpl @Inject constructor(
         }
 
     override suspend fun createQuiz(quiz: Quiz): Result<ObjectId, QuizValidationErrors> =
-        when (val result = networkSource.createQuiz(QuizDto.fromDomain(quiz))) {
+        when (val networkResult = withContext(externalScope.coroutineContext + NonCancellable) {
+            networkSource.createQuiz(QuizDto.fromDomain(quiz))
+        }) {
             is NetworkResult.Success -> {
-                Result.success(ObjectId(result.value.id))
+                val result = Result.success(ObjectId(networkResult.value.id))
+
+                // Create a listing for the new Quiz using ID from the network
+                databaseSource.insertAll(
+                    listOf(QuizListingEntity.fromDomain(QuizListing.fromQuiz(quiz.copy(id = result.value))))
+                )
+                result
             }
-            is NetworkResult.HttpError -> handleQuizHttpError(result, quiz.questions.size)
+            is NetworkResult.HttpError -> handleQuizHttpError(networkResult, quiz.questions.size)
             is NetworkResult.NetworkError -> Result.NetworkError
             else -> Result.UnknownError
         }
 
     override suspend fun editQuiz(id: ObjectId, edits: Quiz): Result<Unit, QuizValidationErrors> =
-        when (val result = networkSource.updateQuiz(id.value, QuizDto.fromDomain(edits))) {
+        when (val result = withContext(externalScope.coroutineContext + NonCancellable) {
+            networkSource.updateQuiz(id.value, QuizDto.fromDomain(edits))
+        }) {
             is NetworkResult.Success -> {
+                // Update the listing for the edits
+                databaseSource.insertAll(
+                    listOf(QuizListingEntity.fromDomain(QuizListing.fromQuiz(edits)))
+                )
                 Result.success()
             }
             is NetworkResult.HttpError -> handleQuizHttpError(result, edits.questions.size)
@@ -134,8 +151,12 @@ class QuizRepositoryImpl @Inject constructor(
         }
 
     override suspend fun deleteQuiz(id: ObjectId): Result<Unit, Any?> =
-        when (val result = networkSource.delete(id.value)) {
+        when (val result = withContext(externalScope.coroutineContext + NonCancellable) {
+            networkSource.delete(id.value)
+        }) {
             is NetworkResult.Success -> {
+                // Remove local copy of its listing as well
+                databaseSource.delete(id.value)
                 Result.success()
             }
             is NetworkResult.HttpError -> handleGenericHttpError(result)
@@ -151,7 +172,7 @@ class QuizRepositoryImpl @Inject constructor(
             else -> Result.NetworkError
         }
 
-    private fun <T> handleQuizHttpError(
+    private suspend fun <T> handleQuizHttpError(
         result: NetworkResult.HttpError,
         numQuestions: Int
     ): Result<T, QuizValidationErrors> = when (result.code) {
@@ -162,10 +183,14 @@ class QuizRepositoryImpl @Inject constructor(
         else -> Result.NetworkError
     }
 
-    private fun parseApiErrors(apiErrors: List<ApiError>, numQuestions: Int): QuizValidationErrors {
+    private suspend fun parseApiErrors(
+        apiErrors: List<ApiError>,
+        numQuestions: Int
+    ): QuizValidationErrors {
         val questionErrors = MutableList<String?>(numQuestions) { null }
         var errors = QuizValidationErrors(questionErrors = questionErrors)
         apiErrors.forEach { err ->
+            yield()
             when (err.field) {
                 "title" -> {
                     errors = errors.copy(title = err.message)

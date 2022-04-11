@@ -47,7 +47,7 @@ class QuizFormScreenTest {
         questions = questions,
     )
 
-    private lateinit var responses: SnapshotStateList<ResponseState>
+    private lateinit var responses: SnapshotStateList<FormResponseState>
 
     @Before
     fun beforeEach() {
@@ -55,10 +55,10 @@ class QuizFormScreenTest {
         questions.forEach {
             when (it) {
                 is Question.MultipleChoice -> {
-                    responses.add(ResponseState(QuestionResponse.MultipleChoice()))
+                    responses.add(FormResponseState(QuestionResponse.MultipleChoice()))
                 }
                 is Question.FillIn -> {
-                    responses.add(ResponseState(QuestionResponse.FillIn()))
+                    responses.add(FormResponseState(QuestionResponse.FillIn()))
                 }
                 else -> throw IllegalArgumentException()
             }
@@ -115,7 +115,7 @@ class QuizFormScreenTest {
 
     @Test
     fun canSelectMultipleChoiceAnswer() {
-        val changeResponse: (Int, ResponseState) -> Unit = { i, r ->
+        val changeResponse: (Int, FormResponseState) -> Unit = { i, r ->
             responses[i] = r
         }
         composeTestRule.setContent {
@@ -134,7 +134,7 @@ class QuizFormScreenTest {
 
     @Test
     fun canEditFillInAnswer() {
-        val changeResponse: (Int, ResponseState) -> Unit = { i, r ->
+        val changeResponse: (Int, FormResponseState) -> Unit = { i, r ->
             responses[i] = r
         }
         composeTestRule.setContent {
