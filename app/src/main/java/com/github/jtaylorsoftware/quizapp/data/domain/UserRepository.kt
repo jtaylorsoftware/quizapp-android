@@ -28,21 +28,21 @@ interface UserRepository {
      *
      * @return A Flow that may emit multiple times if fresher data can be made available.
      */
-    fun getProfile(): Flow<Result<User, Any?>>
+    fun getProfile(): Flow<ResultOrFailure<User>>
 
     /**
      * Gets a list containing the user's created quizzes as listings.
      *
      * @return A Flow that may emit multiple times if fresher data can be made available.
      */
-    fun getQuizzes(): Flow<Result<List<QuizListing>, Any?>>
+    fun getQuizzes(): Flow<ResultOrFailure<List<QuizListing>>>
 
     /**
      * Gets a list containing the user's submitted results as listings.
      *
      * @return A Flow that may emit multiple times if fresher data can be made available.
      */
-    fun getResults(): Flow<Result<List<QuizResultListing>, Any?>>
+    fun getResults(): Flow<ResultOrFailure<List<QuizResultListing>>>
 }
 
 class UserRepositoryImpl @Inject constructor(
@@ -51,7 +51,7 @@ class UserRepositoryImpl @Inject constructor(
     private val quizListingDatabaseSource: QuizListingDatabaseSource,
     private val resultListingDatabaseSource: QuizResultListingDatabaseSource,
 ) : UserRepository {
-    override fun getProfile(): Flow<Result<User, Any?>> = flow {
+    override fun getProfile(): Flow<ResultOrFailure<User>> = flow {
         userCache.loadUser()?.let {
             emit(Result.success(User.fromEntity(it)))
         }
@@ -65,19 +65,19 @@ class UserRepositoryImpl @Inject constructor(
             }
             is NetworkResult.HttpError -> {
                 if (networkResult.code == HTTP_UNAUTHORIZED) {
-                    Result.Unauthorized
+                    Result.Failure(FailureReason.UNAUTHORIZED)
                 } else {
-                    Result.NetworkError
+                    Result.failure(FailureReason.NETWORK)
                 }
             }
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.failure(FailureReason.NETWORK)
+            else -> Result.failure(FailureReason.UNKNOWN)
         }
 
         emit(result)
     }
 
-    override fun getQuizzes(): Flow<Result<List<QuizListing>, Any?>> = flow {
+    override fun getQuizzes(): Flow<ResultOrFailure<List<QuizListing>>> = flow {
         userCache.loadUser()?.run {
             val entities = quizListingDatabaseSource.getAllCreatedByUser(id)
             val listings = entities.map { QuizListing.fromEntity(it) }
@@ -86,27 +86,37 @@ class UserRepositoryImpl @Inject constructor(
 
         val result = when (val networkResult = userNetworkSource.getQuizzes()) {
             is NetworkResult.Success -> {
-                val entities = mutableListOf<QuizListingEntity>()
-                val listings = mutableListOf<QuizListing>()
-                convertQuizListingDto(networkResult.value, entities, listings)
-                quizListingDatabaseSource.insertAll(entities)
-                Result.success(listings)
+                val dtoListings = networkResult.value
+                if (dtoListings.isEmpty()) {
+                    // API returned an empty list, in which case they are
+                    // actually deleted and all local data is invalid
+                    userCache.loadUser()?.id?.let { userId ->
+                        quizListingDatabaseSource.deleteAllByUser(userId)
+                    }
+                    Result.success(emptyList<QuizListing>())
+                } else {
+                    val entities = mutableListOf<QuizListingEntity>()
+                    val listings = mutableListOf<QuizListing>()
+                    convertQuizListingDto(dtoListings, entities, listings)
+                    quizListingDatabaseSource.insertAll(entities)
+                    Result.success(listings)
+                }
             }
             is NetworkResult.HttpError -> {
                 if (networkResult.code == HTTP_UNAUTHORIZED) {
-                    Result.Unauthorized
+                    Result.Failure(FailureReason.UNAUTHORIZED)
                 } else {
-                    Result.NetworkError
+                    Result.failure(FailureReason.NETWORK)
                 }
             }
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.failure(FailureReason.NETWORK)
+            else -> Result.failure(FailureReason.UNKNOWN)
         }
 
         emit(result)
     }
 
-    override fun getResults(): Flow<Result<List<QuizResultListing>, Any?>> = flow {
+    override fun getResults(): Flow<ResultOrFailure<List<QuizResultListing>>> = flow {
         userCache.loadUser()?.run {
             val entities = resultListingDatabaseSource.getAllByUser(id)
             val listings = entities.map { QuizResultListing.fromEntity(it) }
@@ -115,21 +125,31 @@ class UserRepositoryImpl @Inject constructor(
 
         val result = when (val networkResult = userNetworkSource.getResults()) {
             is NetworkResult.Success -> {
-                val entities = mutableListOf<QuizResultListingEntity>()
-                val listings = mutableListOf<QuizResultListing>()
-                convertResultListingDto(networkResult.value, entities, listings)
-                resultListingDatabaseSource.insertAll(entities)
-                Result.success(listings)
+                val dtoListings = networkResult.value
+                if (dtoListings.isEmpty()) {
+                    // API returned an empty list, in which case they are
+                    // actually deleted and all local data is invalid
+                    userCache.loadUser()?.id?.let { userId ->
+                        resultListingDatabaseSource.deleteAllByUser(userId)
+                    }
+                    Result.success(emptyList<QuizResultListing>())
+                } else {
+                    val entities = mutableListOf<QuizResultListingEntity>()
+                    val listings = mutableListOf<QuizResultListing>()
+                    convertResultListingDto(dtoListings, entities, listings)
+                    resultListingDatabaseSource.insertAll(entities)
+                    Result.success(listings)
+                }
             }
             is NetworkResult.HttpError -> {
                 if (networkResult.code == HTTP_UNAUTHORIZED) {
-                    Result.Unauthorized
+                    Result.Failure(FailureReason.UNAUTHORIZED)
                 } else {
-                    Result.NetworkError
+                    Result.failure(FailureReason.NETWORK)
                 }
             }
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.failure(FailureReason.NETWORK)
+            else -> Result.failure(FailureReason.UNKNOWN)
         }
 
         emit(result)

@@ -2,6 +2,7 @@ package com.github.jtaylorsoftware.quizapp.ui.quiz
 
 import androidx.lifecycle.SavedStateHandle
 import com.github.jtaylorsoftware.quizapp.data.QuestionType
+import com.github.jtaylorsoftware.quizapp.data.domain.FailureReason
 import com.github.jtaylorsoftware.quizapp.data.domain.FakeQuizRepository
 import com.github.jtaylorsoftware.quizapp.data.domain.QuizRepository
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
@@ -12,10 +13,6 @@ import com.github.jtaylorsoftware.quizapp.data.network.dto.QuestionDto
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizDto
 import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import com.github.jtaylorsoftware.quizapp.util.toInstant
-import io.mockk.confirmVerified
-import io.mockk.justRun
-import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.*
@@ -62,6 +59,16 @@ class QuizEditorViewModelTest {
     private lateinit var networkSource: FakeQuizNetworkSource
     private lateinit var quizRepository: QuizRepository
 
+    // Runs a block of code on the current Editor UiState in the ViewModel.
+    private fun <T> QuizEditorViewModel.runAsEditor(block: QuizEditorUiState.Editor.() -> T): T {
+        return (this.uiState as QuizEditorUiState.Editor).block()
+    }
+
+    // Runs a block of code on the current QuizState in the ViewModel.
+    private fun <T> QuizEditorViewModel.runAsQuizState(block: QuizState.() -> T): T {
+        return (this.uiState as QuizEditorUiState.Editor).quizState.block()
+    }
+
     @Before
     fun beforeEach() {
         Dispatchers.setMain(StandardTestDispatcher())
@@ -79,11 +86,10 @@ class QuizEditorViewModelTest {
     fun `does not load an existing quiz when SavedStateHandle does not have id`() = runTest {
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value,
-            IsInstanceOf(QuizEditorUiState.Creator::class.java)
+            viewModel.uiState,
+            IsInstanceOf(QuizEditorUiState.Editor::class.java)
         )
-        val quizState = viewModel.uiState.value as QuizState
-        assertThat(quizState.questions, `is`(empty()))
+        assertThat(viewModel.runAsQuizState { questions }, `is`(empty()))
     }
 
     @Test
@@ -96,95 +102,100 @@ class QuizEditorViewModelTest {
 
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizEditorUiState.Editor::class.java)
         )
 
-        val quizState = viewModel.uiState.value as QuizState
-        assertThat(quizState.title.text, `is`(quizDto.title))
-        assertThat(quizState.expiration, `is`(quizDto.expiration.toInstant()))
-        assertThat(quizState.questions, hasSize(2))
-        assertThat(quizState.allowedUsers, `is`(allowedUsers))
-        assertThat(quizState.questions[0], IsInstanceOf(QuestionState.MultipleChoice::class.java))
-        assertThat(quizState.questions[1], IsInstanceOf(QuestionState.FillIn::class.java))
-    }
-
-    @Test
-    fun `submitQuiz should call the given callback when it succeeds`() = runTest {
-        viewModel = QuizEditorViewModel(
-            SavedStateHandle().apply {
-                set("quiz", quizId.value)
-            }, quizRepository, Dispatchers.Main
-        )
-
-        advanceUntilIdle()
-
-        val onSuccess = mockk<() -> Unit>()
-        justRun { onSuccess() }
-
-        viewModel.submitQuiz(onSuccess)
-        advanceUntilIdle()
-        verify(exactly = 1) {
-            onSuccess()
+        viewModel.runAsQuizState {
+            assertThat(title.text, `is`(quizDto.title))
+            assertThat(expiration, `is`(quizDto.expiration.toInstant()))
+            assertThat(questions, hasSize(2))
+            assertThat(allowedUsers, `is`(allowedUsers))
+            assertThat(questions[0], IsInstanceOf(QuestionState.MultipleChoice::class.java))
+            assertThat(questions[1], IsInstanceOf(QuestionState.FillIn::class.java))
         }
-        confirmVerified(onSuccess)
     }
 
     @Test
-    fun `submitQuiz should set loading error when it fails with bad request`() = runTest {
+    fun `uploadQuiz should set uploadStatus to Success when it succeeds`() = runTest {
+        viewModel = QuizEditorViewModel(
+            SavedStateHandle().apply {
+                set("quiz", quizId.value)
+            }, quizRepository, Dispatchers.Main
+        )
+
+        advanceUntilIdle()
+
+        viewModel.uploadQuiz()
+        advanceUntilIdle()
+
+        assertThat(
+            viewModel.runAsEditor { uploadStatus },
+            IsInstanceOf(LoadingState.Success::class.java)
+        )
+    }
+
+    @Test
+    fun `uploadQuiz should set loading error when it fails with bad request`() = runTest {
         viewModel = QuizEditorViewModel(
             SavedStateHandle().apply {
                 set("quiz", quizId.value)
             }, quizRepository, Dispatchers.Main
         )
         advanceUntilIdle()
-        networkSource.failOnNextWith(NetworkResult.HttpError(400, errors = listOf(ApiError(message="invalid"))))
+        networkSource.failOnNextWith(
+            NetworkResult.HttpError(
+                400,
+                errors = listOf(ApiError(message = "invalid"))
+            )
+        )
 
-        viewModel.submitQuiz {}
+        viewModel.uploadQuiz()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value.loading,
+            viewModel.runAsEditor { uploadStatus },
             IsInstanceOf(LoadingState.Error::class.java)
         )
     }
 
     @Test
-    fun `submitQuiz should set uiState to RequireSignIn when it fails with unauthorized`() =
+    fun `uploadQuiz should set uiState loading to Error when it fails with unauthorized`() =
         runTest {
             viewModel = QuizEditorViewModel(
                 SavedStateHandle().apply {
                     set("quiz", quizId.value)
                 }, quizRepository, Dispatchers.Main
             )
+
             advanceUntilIdle()
 
             networkSource.failOnNextWith(NetworkResult.HttpError(401))
 
-            viewModel.submitQuiz {}
+            viewModel.uploadQuiz()
             advanceUntilIdle()
             assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizEditorUiState.RequireSignIn::class.java)
+                (viewModel.uiState as QuizEditorUiState.Editor).uploadStatus,
+                IsInstanceOf(LoadingState.Error::class.java)
             )
         }
 
     @Test
-    fun `submitQuiz should revalidate and not submit when title empty`() = runTest {
+    fun `uploadQuiz should revalidate and not submit when title empty`() = runTest {
         // empty fresh quiz, should fail because of empty title
-        viewModel.submitQuiz{}
+        viewModel.uploadQuiz()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value.loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            viewModel.uiState.loading,
+            IsInstanceOf(LoadingState.NotStarted::class.java)
         )
         assertThat(
-            (viewModel.uiState.value as QuizState).title.error,
+            viewModel.runAsQuizState { title.error },
             `is`(notNullValue())
         )
     }
 
     @Test
-    fun `submitQuiz should revalidate and not submit when allowedUsers are invalid`() = runTest {
+    fun `uploadQuiz should revalidate and not submit when allowedUsers are invalid`() = runTest {
         // Use existing quiz but modified for invalid allowedUsers
         val errorQuiz = quizDto.copy(allowedUsers = listOf("a".repeat(20), "u\$ername"))
         networkSource = FakeQuizNetworkSource(quizzes = listOf(errorQuiz))
@@ -196,20 +207,20 @@ class QuizEditorViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.submitQuiz{}
+        viewModel.uploadQuiz()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value.loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            viewModel.runAsEditor { uploadStatus },
+            IsInstanceOf(LoadingState.Error::class.java)
         )
         assertThat(
-            (viewModel.uiState.value as QuizState).allowedUsersError,
+            viewModel.runAsQuizState { allowedUsersError },
             `is`(notNullValue())
         )
     }
 
     @Test
-    fun `submitQuiz should allow original expiration if unchanged`() = runTest {
+    fun `uploadQuiz should allow original expiration if unchanged`() = runTest {
         // Use existing quiz but modified for invalid date
         val errorQuiz =
             quizDto.copy(expiration = Instant.now().minus(10, ChronoUnit.DAYS).toString())
@@ -223,32 +234,32 @@ class QuizEditorViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.submitQuiz{}
+        viewModel.uploadQuiz()
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as QuizState).expirationError,
+            viewModel.runAsQuizState { expirationError },
             `is`(nullValue())
         )
     }
 
     @Test
-    fun `submitQuiz should require at least one question and not submit when errors`() = runTest {
+    fun `uploadQuiz should require at least one question and not submit when errors`() = runTest {
         // use fresh quiz with no questions
-        viewModel.submitQuiz{}
+        viewModel.uploadQuiz()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value.loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            viewModel.uiState.loading,
+            IsInstanceOf(LoadingState.NotStarted::class.java)
         )
         // Should use questionsError to convey invalid number of questions
         assertThat(
-            (viewModel.uiState.value as QuizState).questionsError,
+            viewModel.runAsQuizState { questionsError },
             `is`(notNullValue())
         )
     }
 
     @Test
-    fun `submitQuiz should check MC has at least two answers and prompt not empty and answer text not empty and correctAnswer not null`() =
+    fun `uploadQuiz should check MC has at least two answers and prompt not empty and answer text not empty and correctAnswer not null`() =
         runTest {
             // Use existing quiz but modified to be invalid
             val errorQuiz =
@@ -273,42 +284,48 @@ class QuizEditorViewModelTest {
             )
             advanceUntilIdle()
 
-            viewModel.submitQuiz{}
+            viewModel.uploadQuiz()
             advanceUntilIdle()
             assertThat(
-                viewModel.uiState.value.loading,
-                IsInstanceOf(LoadingState.AwaitingAction::class.java)
+                viewModel.runAsEditor { uploadStatus },
+                IsInstanceOf(LoadingState.Error::class.java)
             )
 
             // Should have an "overall" error because MultipleChoice needs at least 2 answers
             assertThat(
-                (viewModel.uiState.value as QuizState).questions[0].error,
+                viewModel.runAsQuizState { questions[0].error },
                 `is`(notNullValue())
             )
 
             // Each answer should have an error because they're empty
-            ((viewModel.uiState.value as QuizState).questions[0] as QuestionState.MultipleChoice).answerErrors.forEach {
-                assertThat(
-                    it,
-                    `is`(notNullValue())
-                )
+            viewModel.runAsQuizState {
+                (questions[0] as QuestionState.MultipleChoice).answers.forEach {
+                    assertThat(
+                        it.text.error,
+                        `is`(notNullValue())
+                    )
+                }
             }
 
             // Should have correctAnswerError because it was null
             assertThat(
-                ((viewModel.uiState.value as QuizState).questions[0] as QuestionState.MultipleChoice).correctAnswerError,
+                viewModel.runAsQuizState {
+                    (questions[0] as QuestionState.MultipleChoice).correctAnswerError
+                },
                 `is`(notNullValue())
             )
 
             // Should have questionTextError because the prompt is empty
             assertThat(
-                ((viewModel.uiState.value as QuizState).questions[0] as QuestionState.MultipleChoice).questionTextError,
+                viewModel.runAsQuizState {
+                    (questions[0] as QuestionState.MultipleChoice).prompt.error
+                },
                 `is`(notNullValue())
             )
         }
 
     @Test
-    fun `submitQuiz should check FillIn question has prompt and correctAnswer`() = runTest {
+    fun `uploadQuiz should check FillIn question has prompt and correctAnswer`() = runTest {
         // Use existing quiz but modified to be invalid
         val errorQuiz =
             quizDto.copy(
@@ -326,35 +343,41 @@ class QuizEditorViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.submitQuiz{}
+        viewModel.uploadQuiz()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value.loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            viewModel.runAsEditor { uploadStatus },
+            IsInstanceOf(LoadingState.Error::class.java)
         )
 
         // Should have correctAnswer error
         assertThat(
-            ((viewModel.uiState.value as QuizState).questions[0] as QuestionState.FillIn).correctAnswerError,
+            viewModel.runAsQuizState {
+                (questions[0] as QuestionState.FillIn).correctAnswer.error
+            },
             `is`(notNullValue())
         )
 
         // Should have prompt error
         assertThat(
-            ((viewModel.uiState.value as QuizState).questions[0] as QuestionState.FillIn).questionTextError,
+            viewModel.runAsQuizState {
+                (questions[0] as QuestionState.FillIn).prompt.error
+            },
             `is`(notNullValue())
         )
     }
 
     @Test
     fun `addQuestion should add question`() = runTest {
-        viewModel.addQuestion()
-        advanceUntilIdle()
-        assertThat((viewModel.uiState.value as QuizState).questions, hasSize(1))
-        assertThat(
-            (viewModel.uiState.value as QuizState).questions[0],
-            IsInstanceOf(QuestionState.Empty::class.java)
-        )
+        viewModel.runAsQuizState {
+            addQuestion()
+            advanceUntilIdle()
+            assertThat(questions, hasSize(1))
+            assertThat(
+                questions[0],
+                IsInstanceOf(QuestionState.Empty::class.java)
+            )
+        }
     }
 
     @Test
@@ -365,33 +388,49 @@ class QuizEditorViewModelTest {
             }, quizRepository, Dispatchers.Main
         )
         advanceUntilIdle()
-        viewModel.addQuestion()
-        val quizState = viewModel.uiState.value as QuizState
-        assertThat(quizState.questions, hasSize(quizDto.questions.size))
+        viewModel.runAsQuizState {
+            addQuestion()
+            advanceUntilIdle()
+            assertThat(questions, hasSize(quizDto.questions.size))
+        }
     }
 
     @Test
     fun `changeQuestionType should replace question with one of new type`() = runTest {
         advanceUntilIdle()
-        viewModel.addQuestion()
-        advanceUntilIdle()
-        viewModel.changeQuestionType(0, QuestionType.FillIn)
-        advanceUntilIdle()
-        var quizState = viewModel.uiState.value as QuizState
-        assertThat(quizState.questions[0], IsInstanceOf(QuestionState.FillIn::class.java))
+        viewModel.runAsQuizState {
+            addQuestion()
+            advanceUntilIdle()
 
-        viewModel.changeQuestionType(0, QuestionType.MultipleChoice)
-        advanceUntilIdle()
-        quizState = viewModel.uiState.value as QuizState
-        assertThat(quizState.questions[0], IsInstanceOf(QuestionState.MultipleChoice::class.java))
+            changeQuestionType(
+                0,
+                QuestionType.FillIn
+            )
+
+            advanceUntilIdle()
+            assertThat(questions[0], IsInstanceOf(QuestionState.FillIn::class.java))
+
+            changeQuestionType(
+                0,
+                QuestionType.MultipleChoice
+            )
+            advanceUntilIdle()
+            assertThat(questions[0], IsInstanceOf(QuestionState.MultipleChoice::class.java))
+        }
     }
 
     @Test(expected = IllegalArgumentException::class)
     fun `changeQuestionType should not allow changing to Empty type`() = runTest {
-        viewModel.addQuestion()
-        advanceUntilIdle()
-        viewModel.changeQuestionType(0, QuestionType.Empty)
-        advanceUntilIdle()
+        viewModel.runAsQuizState {
+            addQuestion()
+            advanceUntilIdle()
+
+            changeQuestionType(
+                0,
+                QuestionType.Empty
+            )
+            advanceUntilIdle()
+        }
     }
 
     @Test
@@ -402,32 +441,42 @@ class QuizEditorViewModelTest {
             }, quizRepository, Dispatchers.Main
         )
         advanceUntilIdle()
-        viewModel.changeQuestionType(0, QuestionType.FillIn)
-        assertThat(
-            (viewModel.uiState.value as QuizState).questions[0],
-            IsInstanceOf(QuestionState.MultipleChoice::class.java)
-        )
+        viewModel.runAsQuizState {
+            changeQuestionType(
+                0,
+                QuestionType.FillIn
+            )
+            assertThat(
+                questions[0],
+                IsInstanceOf(QuestionState.MultipleChoice::class.java)
+            )
+        }
     }
 
     @Test
     fun `deleteQuestion should remove a question at index`() = runTest {
-        viewModel.addQuestion()
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).questions,
-            hasSize(1)
-        )
-        viewModel.deleteQuestion(0)
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).questions,
-            `is`(empty())
-        )
+        viewModel.runAsQuizState {
+            addQuestion()
+            advanceUntilIdle()
+            assertThat(
+                questions,
+                hasSize(1)
+            )
+            deleteQuestion(0)
+            advanceUntilIdle()
+            assertThat(
+                questions,
+                `is`(empty())
+            )
+        }
+
     }
 
     @Test
     fun `deleteQuestion should not throw on invalid index and instead do nothing`() = runTest {
-        viewModel.deleteQuestion(0)
+        viewModel.runAsQuizState {
+            deleteQuestion(0)
+        }
     }
 
     @Test
@@ -438,11 +487,13 @@ class QuizEditorViewModelTest {
             }, quizRepository, Dispatchers.Main
         )
         advanceUntilIdle()
-        viewModel.deleteQuestion(0)
-        assertThat(
-            (viewModel.uiState.value as QuizState).questions,
-            hasSize(quizDto.questions.size)
-        )
+        viewModel.runAsQuizState {
+            deleteQuestion(0)
+            assertThat(
+                questions,
+                hasSize(quizDto.questions.size)
+            )
+        }
     }
 
     @Test
@@ -450,12 +501,14 @@ class QuizEditorViewModelTest {
         advanceUntilIdle()
 
         val title = "title123"
-        viewModel.setTitle(title)
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).title.text,
-            `is`(title)
-        )
+        viewModel.runAsQuizState {
+            changeTitleText(title)
+            advanceUntilIdle()
+            assertThat(
+                this.title.text,
+                `is`(title)
+            )
+        }
     }
 
     @Test
@@ -467,23 +520,27 @@ class QuizEditorViewModelTest {
         )
         advanceUntilIdle()
         val title = "title123"
-        viewModel.setTitle(title)
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).title.text,
-            `is`(title)
-        )
+        viewModel.runAsQuizState {
+            changeTitleText(title)
+            advanceUntilIdle()
+            assertThat(
+                this.title.text,
+                `is`(title)
+            )
+        }
     }
 
     @Test
     fun `setExpiration should change the expiration`() = runTest {
         val expiration = Instant.now().plus(10, ChronoUnit.DAYS)
-        viewModel.setExpiration(expiration)
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).expiration,
-            `is`(expiration)
-        )
+        viewModel.runAsQuizState {
+            this.expiration = expiration
+            advanceUntilIdle()
+            assertThat(
+                this.expiration,
+                `is`(expiration)
+            )
+        }
     }
 
     @Test
@@ -491,12 +548,14 @@ class QuizEditorViewModelTest {
         advanceUntilIdle()
 
         val expiration = Instant.now().minus(10, ChronoUnit.DAYS)
-        viewModel.setExpiration(expiration)
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).expirationError,
-            `is`(notNullValue())
-        )
+        viewModel.runAsQuizState {
+            this.expiration = expiration
+            advanceUntilIdle()
+            assertThat(
+                this.expirationError,
+                `is`(notNullValue())
+            )
+        }
     }
 
     @Test
@@ -508,23 +567,26 @@ class QuizEditorViewModelTest {
         )
         advanceUntilIdle()
         val expiration = Instant.now().plus(10, ChronoUnit.DAYS)
-        viewModel.setExpiration(expiration)
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).expiration,
-            `is`(expiration)
-        )
+        viewModel.runAsQuizState {
+            this.expiration = expiration
+            advanceUntilIdle()
+            assertThat(
+                this.expiration,
+                `is`(expiration)
+            )
+        }
     }
 
     @Test
     fun `setIsPublic should change isPublic`() = runTest {
-        val isPublic = false
-        viewModel.setIsPublic(isPublic)
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).isPublic,
-            `is`(isPublic)
-        )
+        viewModel.runAsQuizState {
+            isPublic = false
+            advanceUntilIdle()
+            assertThat(
+                isPublic,
+                `is`(false)
+            )
+        }
     }
 
     @Test
@@ -535,12 +597,14 @@ class QuizEditorViewModelTest {
             }, quizRepository, Dispatchers.Main
         )
         advanceUntilIdle()
-        val isPublic = false
-        viewModel.setIsPublic(isPublic)
-        assertThat(
-            (viewModel.uiState.value as QuizState).isPublic,
-            `is`(isPublic)
-        )
+        viewModel.runAsQuizState {
+            isPublic = false
+            advanceUntilIdle()
+            assertThat(
+                isPublic,
+                `is`(false)
+            )
+        }
     }
 
     @Test
@@ -548,23 +612,25 @@ class QuizEditorViewModelTest {
         advanceUntilIdle()
 
         var allowedUsers = "user1, name2, name3, name4, name5"
-        viewModel.setAllowedUsers(allowedUsers)
-        advanceUntilIdle()
+        viewModel.runAsQuizState {
+            this.allowedUsers = allowedUsers
+            advanceUntilIdle()
 
-        assertThat(
-            (viewModel.uiState.value as QuizState).allowedUsers,
-            `is`(allowedUsers)
-        )
+            assertThat(
+                this.allowedUsers,
+                `is`(allowedUsers)
+            )
 
-        // check trailing comma
-        allowedUsers = "user1, "
-        viewModel.setAllowedUsers(allowedUsers)
-        advanceUntilIdle()
+            // check trailing comma
+            allowedUsers = "user1, "
+            this.allowedUsers = allowedUsers
+            advanceUntilIdle()
 
-        assertThat(
-            (viewModel.uiState.value as QuizState).allowedUsers,
-            `is`(allowedUsers)
-        )
+            assertThat(
+                this.allowedUsers,
+                `is`(allowedUsers)
+            )
+        }
     }
 
     @Test
@@ -573,30 +639,32 @@ class QuizEditorViewModelTest {
 
         // a long username as only value
         var allowedUsers = "reallylongusernameeeeeeeeee"
-        viewModel.setAllowedUsers(allowedUsers)
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).allowedUsersError,
-            `is`(notNullValue())
-        )
+        viewModel.runAsQuizState {
+            this.allowedUsers = allowedUsers
+            advanceUntilIdle()
+            assertThat(
+                this.allowedUsersError,
+                `is`(notNullValue())
+            )
 
-        // a long username between other usernames
-        allowedUsers = "username1, reallylongusername, username2"
-        viewModel.setAllowedUsers(allowedUsers)
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).allowedUsersError,
-            `is`(notNullValue())
-        )
+            // a long username between other usernames
+            allowedUsers = "username1, reallylongusername, username2"
+            this.allowedUsers = allowedUsers
+            advanceUntilIdle()
+            assertThat(
+                this.allowedUsersError,
+                `is`(notNullValue())
+            )
 
-        // spaces in one of the names
-        allowedUsers = "username1, us er nam e, username2"
-        viewModel.setAllowedUsers(allowedUsers)
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).allowedUsersError,
-            `is`(notNullValue())
-        )
+            // spaces in one of the names
+            allowedUsers = "username1, us er nam e, username2"
+            this.allowedUsers = allowedUsers
+            advanceUntilIdle()
+            assertThat(
+                this.allowedUsersError,
+                `is`(notNullValue())
+            )
+        }
     }
 
     @Test
@@ -608,29 +676,24 @@ class QuizEditorViewModelTest {
             }, quizRepository, Dispatchers.Main
         )
         advanceUntilIdle()
-        val allowedUsers = "user1"
-        viewModel.setAllowedUsers(allowedUsers)
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizState).allowedUsers,
-            `is`(allowedUsers)
-        )
+
+        viewModel.runAsQuizState {
+            this.allowedUsers = "user1"
+            advanceUntilIdle()
+            assertThat(
+                allowedUsers,
+                `is`("user1")
+            )
+        }
     }
 
     @Test
-    fun `UiState is RequireSignIn if ViewModelState has unauthorized flag set`() = runTest {
-        val state = QuizEditorViewModelState(viewModel, unauthorized = true)
-        val uiState = QuizEditorUiState.fromViewModelState(state)
-        assertThat(
-            uiState,
-            IsInstanceOf(QuizEditorUiState.RequireSignIn::class.java)
-        )
-    }
-
-    @Test
-    fun `UiState is NoQuiz if ViewModelState not isLoading or unauthorized and failedToLoad is set`() =
+    fun `UiState is NoQuiz if ViewModelState loading is Error`() =
         runTest {
-            val state = QuizEditorViewModelState(viewModel, failedToLoad = true, loading = false)
+            val state = QuizEditorViewModelState(
+                quizState = TestQuizStateHolder(),
+                loading = LoadingState.Error(FailureReason.UNKNOWN)
+            )
             val uiState = QuizEditorUiState.fromViewModelState(state)
             assertThat(
                 uiState,
@@ -639,20 +702,25 @@ class QuizEditorViewModelTest {
         }
 
     @Test
-    fun `UiState is Creator if ViewModelState not loading or unauthorized or failedToLoad and quizId null`() =
+    fun `UiState is Creator if ViewModelState not loading or failedToLoad and quizId null`() =
         runTest {
-            val state = QuizEditorViewModelState(viewModel, loading = false)
+            val state =
+                QuizEditorViewModelState(quizState = TestQuizStateHolder(), loading = LoadingState.Success())
             val uiState = QuizEditorUiState.fromViewModelState(state)
             assertThat(
                 uiState,
-                IsInstanceOf(QuizEditorUiState.Creator::class.java)
+                IsInstanceOf(QuizEditorUiState.Editor::class.java)
             )
         }
 
     @Test
-    fun `UiState is Editor if ViewModelState not loading or unauthorized or failedToLoad and quizId is not null`() =
+    fun `UiState is Editor if ViewModelState not loading or failedToLoad and quizId is not null`() =
         runTest {
-            val state = QuizEditorViewModelState(viewModel, loading = false, quizId = "")
+            val state = QuizEditorViewModelState(
+                quizState = TestQuizStateHolder(),
+                loading = LoadingState.Success(),
+                quizId = ""
+            )
             val uiState = QuizEditorUiState.fromViewModelState(state)
             assertThat(
                 uiState,

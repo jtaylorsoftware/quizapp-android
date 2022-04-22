@@ -3,8 +3,6 @@ package com.github.jtaylorsoftware.quizapp.data.local
 import android.content.Context
 import android.content.SharedPreferences
 import com.github.jtaylorsoftware.quizapp.data.local.entities.UserEntity
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
 
 /**
  * A data source that saves the [UserEntity] to some local persistence mechanism.

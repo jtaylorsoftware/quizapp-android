@@ -15,8 +15,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.take
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.*
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
 import org.hamcrest.Matchers.hasSize
@@ -52,7 +54,7 @@ class QuizRepositoryTest {
 
     @Before
     fun beforeEach() {
-        Dispatchers.setMain(StandardTestDispatcher())
+        Dispatchers.setMain(UnconfinedTestDispatcher())
         databaseSource = FakeQuizListingDatabaseSource(quizEntities)
         networkSource = FakeQuizNetworkSource(quizDto)
         repository = QuizRepositoryImpl(databaseSource, networkSource)
@@ -81,27 +83,23 @@ class QuizRepositoryTest {
 
         // Should fail because NetworkSource did
         val quizResult = repository.getQuiz(ids[0])
-        assertThat(quizResult, IsInstanceOf(Result.NetworkError::class.java))
+        assertThat((quizResult as Result.Failure).reason, `is`(FailureReason.NETWORK))
     }
 
     @Test
     fun `getQuiz should fail with NotFound when NetworkSource returns 404`() = runTest {
         // Should fail because NetworkSource did
-        val quiz = repository.getQuiz(randomId())
+        val quizResult = repository.getQuiz(randomId())
 
-        assertThat(quiz, IsInstanceOf(Result.NotFound::class.java))
+        assertThat((quizResult as Result.Failure).reason, `is`(FailureReason.NOT_FOUND))
     }
 
     @Test
     fun `getAsListing should return local then network value`() = runTest {
-        val quizzes = mutableListOf<Result<QuizListing, Any?>>()
-        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-            repository.getAsListing(ids[0]).take(2).collect {
-                quizzes.add(it)
-            }
+        val quizzes = mutableListOf<ResultOrFailure<QuizListing>>()
+        repository.getAsListing(ids[0]).take(2).collect {
+            quizzes.add(it)
         }
-
-        job.cancel()
 
         assertThat(quizzes, hasSize(2))
         assertThat((quizzes[0] as Result.Success).value.title, `is`(quizEntities[0].title))
@@ -110,11 +108,7 @@ class QuizRepositoryTest {
 
     @Test
     fun `getAsListing should cache network result`() = runTest {
-        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-            repository.getAsListing(ids[0]).take(2).collect()
-        }
-
-        job.cancel()
+        repository.getAsListing(ids[0]).take(2).collect()
 
         val cached = databaseSource.getById(ids[0].value)!!
         assertThat(
@@ -126,16 +120,12 @@ class QuizRepositoryTest {
     @Test
     fun `getAsListing should fail with NotFound when neither source has the requested quiz`() =
         runTest {
-            val results = mutableListOf<Result<QuizListing, Any?>>()
-            val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-                repository.getAsListing(randomId()).collect {
-                    results.add(it)
-                }
+            val results = mutableListOf<ResultOrFailure<QuizListing>>()
+            repository.getAsListing(randomId()).collect {
+                results.add(it)
             }
 
-            job.cancel()
-
-            assertThat(results[0], IsInstanceOf(Result.NotFound::class.java))
+            assertThat((results[0] as Result.Failure).reason, `is`(FailureReason.NOT_FOUND))
         }
 
     @Test
@@ -183,7 +173,7 @@ class QuizRepositoryTest {
 
             val result =
                 repository.createQuiz(Quiz(questions = List(2) { Question.MultipleChoice() }))
-            assertThat(result, IsInstanceOf(Result.BadRequest::class.java))
+            assertThat((result as Result.Failure).reason, `is`(FailureReason.FORM_HAS_ERRORS))
 
             val validationError = QuizValidationErrors(
                 title = errorMessage,
@@ -194,7 +184,7 @@ class QuizRepositoryTest {
             )
 
             assertThat(
-                (result as Result.BadRequest).error,
+                result.errors,
                 `is`(SameQuizValidationErrorAs(validationError))
             )
         }
@@ -241,7 +231,7 @@ class QuizRepositoryTest {
                 ids[0],
                 Quiz(questions = List(2) { Question.MultipleChoice() })
             )
-            assertThat(result, IsInstanceOf(Result.BadRequest::class.java))
+            assertThat((result as Result.Failure).reason, `is`(FailureReason.FORM_HAS_ERRORS))
 
             val validationError = QuizValidationErrors(
                 title = errorMessage,
@@ -252,7 +242,7 @@ class QuizRepositoryTest {
             )
 
             assertThat(
-                (result as Result.BadRequest).error,
+                result.errors,
                 `is`(SameQuizValidationErrorAs(validationError))
             )
         }
@@ -267,7 +257,7 @@ class QuizRepositoryTest {
 
         // Should be deleted
         val getResult = repository.getQuiz(id)
-        assertThat(getResult, IsInstanceOf(Result.NotFound::class.java))
+        assertThat((getResult as Result.Failure).reason, `is`(FailureReason.NOT_FOUND))
     }
 
     @Test
@@ -277,6 +267,6 @@ class QuizRepositoryTest {
         networkSource.failOnNextWith(error)
 
         val result = repository.deleteQuiz(ObjectId())
-        assertThat(result, IsInstanceOf(Result.Forbidden::class.java))
+        assertThat((result as Result.Failure).reason, `is`(FailureReason.FORBIDDEN))
     }
 }

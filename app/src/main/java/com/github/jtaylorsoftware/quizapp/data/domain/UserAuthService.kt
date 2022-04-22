@@ -5,22 +5,20 @@ import com.github.jtaylorsoftware.quizapp.data.domain.models.UserRegistration
 import com.github.jtaylorsoftware.quizapp.data.local.UserCache
 import com.github.jtaylorsoftware.quizapp.data.network.NetworkResult
 import com.github.jtaylorsoftware.quizapp.data.network.UserNetworkSource
-import com.github.jtaylorsoftware.quizapp.data.network.dto.ApiError
-import com.github.jtaylorsoftware.quizapp.data.network.dto.UserCredentialsDto
-import com.github.jtaylorsoftware.quizapp.data.network.dto.UserRegistrationDto
+import com.github.jtaylorsoftware.quizapp.data.network.dto.*
 import com.github.jtaylorsoftware.quizapp.di.AppMainScope
 import kotlinx.coroutines.*
 import java.net.HttpURLConnection.*
 import javax.inject.Inject
 
 /**
- * Sign-up and sign-in service for Users.
+ * Sign-up and login service for Users.
  */
 interface UserAuthService {
     /**
      * Returns `true` if the user is signed in locally, but may not be authorized.
      */
-    fun userIsSignedIn(): Result<Boolean, Nothing>
+    fun userIsSignedIn(): ResultOrFailure<Boolean>
 
     /**
      * Registers a new User.
@@ -33,14 +31,19 @@ interface UserAuthService {
     suspend fun signInUser(credentials: UserCredentials): Result<Unit, UserCredentialErrors>
 
     /**
+     * Signs out the current User, clearing their token and cached data.
+     */
+    suspend fun signOut()
+
+    /**
      * Changes the current User's email.
      */
-    suspend fun changeEmail(email: String): Result<Unit, String?>
+    suspend fun changeEmail(email: String): Result<Unit, ChangeEmailError>
 
     /**
      * Changes the current User's password.
      */
-    suspend fun changePassword(password: String): Result<Unit, String?>
+    suspend fun changePassword(password: String): Result<Unit, ChangePasswordError>
 }
 
 /**
@@ -60,13 +63,27 @@ data class UserCredentialErrors(
     val password: String? = null,
 )
 
+/**
+ * The email to change to is possibly invalid.
+ */
+data class ChangeEmailError(
+    val email: String? = null
+)
+
+/**
+ * The password to change to is possibly invalid.
+ */
+data class ChangePasswordError(
+    val password: String? = null
+)
+
 class UserAuthServiceImpl @Inject constructor(
     private val cache: UserCache,
     private val networkSource: UserNetworkSource,
     @AppMainScope private val externalScope: CoroutineScope = MainScope()
 ) : UserAuthService {
 
-    override fun userIsSignedIn(): Result<Boolean, Nothing> = cache.loadToken()?.let {
+    override fun userIsSignedIn(): ResultOrFailure<Boolean> = cache.loadToken()?.let {
         Result.success(true)
     } ?: Result.success(false)
 
@@ -82,18 +99,14 @@ class UserAuthServiceImpl @Inject constructor(
                 }
                 is NetworkResult.HttpError -> {
                     when (result.code) {
-                        HTTP_BAD_REQUEST -> {
+                        HTTP_BAD_REQUEST, HTTP_CONFLICT -> {
                             val validationError = parseRegistrationErrors(result.errors)
-                            Result.BadRequest(validationError)
+                            Result.failure(FailureReason.FORM_HAS_ERRORS, validationError)
                         }
-                        HTTP_CONFLICT -> {
-                            val validationError = parseRegistrationErrors(result.errors)
-                            Result.Conflict(validationError)
-                        }
-                        else -> Result.UnknownError
+                        else -> Result.failure(FailureReason.NETWORK)
                     }
                 }
-                else -> Result.NetworkError
+                else -> Result.failure(FailureReason.NETWORK)
             }
         }
 
@@ -109,44 +122,47 @@ class UserAuthServiceImpl @Inject constructor(
                     when (result.code) {
                         HTTP_BAD_REQUEST -> {
                             val validationError = parseCredentialErrors(result.errors)
-                            Result.BadRequest(validationError)
+                            Result.failure(FailureReason.FORM_HAS_ERRORS, validationError)
                         }
-                        else -> Result.UnknownError
+                        else -> Result.failure(FailureReason.NETWORK)
                     }
                 }
-                else -> Result.NetworkError
+                else -> Result.failure(FailureReason.NETWORK)
             }
         }
 
-    override suspend fun changeEmail(email: String): Result<Unit, String?> =
+    override suspend fun signOut() {
+        withContext(externalScope.coroutineContext + NonCancellable) {
+            cache.clearToken()
+            cache.clearUser()
+        }
+    }
+
+    override suspend fun changeEmail(email: String): Result<Unit, ChangeEmailError> =
         // Only wrap the changeEmail in NonCancellable because reading the result isn't
         // that important if we're cancelling (leaving screen)
         when (val result = withContext(externalScope.coroutineContext + NonCancellable) {
-            networkSource.changeEmail(email)
+            networkSource.changeEmail(ChangeEmailRequest(email))
         }) {
             is NetworkResult.Success -> {
                 Result.success()
             }
             is NetworkResult.HttpError -> {
                 when (result.code) {
-                    HTTP_BAD_REQUEST -> {
+                    HTTP_BAD_REQUEST, HTTP_CONFLICT -> {
                         val error = parseSingleError(result.errors, "email")
-                        Result.BadRequest(error)
+                        Result.failure(FailureReason.FORM_HAS_ERRORS, ChangeEmailError(error))
                     }
-                    HTTP_UNAUTHORIZED -> Result.Unauthorized
-                    HTTP_CONFLICT -> {
-                        val error = parseSingleError(result.errors, "email")
-                        Result.Conflict(error)
-                    }
-                    else -> Result.UnknownError
+                    HTTP_UNAUTHORIZED -> Result.Failure(FailureReason.UNAUTHORIZED)
+                    else -> Result.failure(FailureReason.NETWORK)
                 }
             }
-            else -> Result.NetworkError
+            else -> Result.failure(FailureReason.NETWORK)
         }
 
-    override suspend fun changePassword(password: String): Result<Unit, String?> =
+    override suspend fun changePassword(password: String): Result<Unit, ChangePasswordError> =
         when (val result = withContext(externalScope.coroutineContext + NonCancellable) {
-            networkSource.changePassword(password)
+            networkSource.changePassword(ChangePasswordRequest(password))
         }) {
             is NetworkResult.Success -> {
                 Result.success()
@@ -155,13 +171,13 @@ class UserAuthServiceImpl @Inject constructor(
                 when (result.code) {
                     HTTP_BAD_REQUEST -> {
                         val error = parseSingleError(result.errors, "password")
-                        Result.BadRequest(error)
+                        Result.failure(FailureReason.FORM_HAS_ERRORS, ChangePasswordError(error))
                     }
-                    HTTP_UNAUTHORIZED -> Result.Unauthorized
-                    else -> Result.UnknownError
+                    HTTP_UNAUTHORIZED -> Result.Failure(FailureReason.UNAUTHORIZED)
+                    else -> Result.failure(FailureReason.NETWORK)
                 }
             }
-            else -> Result.NetworkError
+            else -> Result.failure(FailureReason.NETWORK)
         }
 
     private suspend fun parseRegistrationErrors(apiErrors: List<ApiError>): UserRegistrationErrors {

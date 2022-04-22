@@ -1,20 +1,22 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.github.jtaylorsoftware.quizapp.data.domain.QuizRepository
-import com.github.jtaylorsoftware.quizapp.data.domain.QuizResultRepository
-import com.github.jtaylorsoftware.quizapp.data.domain.Result
-import com.github.jtaylorsoftware.quizapp.data.domain.UserRepository
+import com.github.jtaylorsoftware.quizapp.data.domain.*
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizListing
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizResultListing
 import com.github.jtaylorsoftware.quizapp.ui.*
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 /**
@@ -34,6 +36,7 @@ sealed interface QuizResultListUiState : UiState {
         // so the username would just be the signed-in user ("Your Results")
         // val username: String,
     ) : QuizResultListUiState
+
     /**
      * The list contains results all for one quiz.
      */
@@ -51,22 +54,16 @@ sealed interface QuizResultListUiState : UiState {
         val quizTitle: String? = null,
     ) : QuizResultListUiState
 
-    /**
-     * The user must sign in again to view this resource.
-     */
-    object RequireSignIn : QuizResultListUiState {
-        override val loading: LoadingState = LoadingState.Error(ErrorStrings.UNAUTHORIZED.message)
-    }
-
     companion object {
         internal fun fromViewModelState(state: QuizResultListViewModelState) =
             when {
-                state.unauthorized -> RequireSignIn
-                state.loading -> NoQuizResults(LoadingState.InProgress)
-                state.data.isNullOrEmpty() -> NoQuizResults(state.loadingState, quizTitle = state.quizTitle)
+                state.data.isNullOrEmpty() -> NoQuizResults(
+                    state.loading,
+                    quizTitle = state.quizTitle,
+                )
                 state.quizId != null -> {
                     ListForQuiz(
-                        state.loadingState,
+                        state.loading,
                         state.data,
                         // If for some reason couldn't load correct title, fall back to results
                         // (since they're all for the same quiz), and lastly give a sensible default.
@@ -75,7 +72,7 @@ sealed interface QuizResultListUiState : UiState {
                 }
                 else -> {
                     ListForUser(
-                        state.loadingState,
+                        state.loading,
                         state.data,
                     )
                 }
@@ -87,10 +84,7 @@ sealed interface QuizResultListUiState : UiState {
  * Internal state representation for the [QuizResultListScreen].
  */
 internal data class QuizResultListViewModelState(
-    override val loading: Boolean = true,
-    val unauthorized: Boolean = false,
-    override val error: String? = null,
-
+    val loading: LoadingState = LoadingState.NotStarted,
     // Used when requesting results for a user - quiz must be null
     // val userId: String? = null,
 
@@ -98,7 +92,9 @@ internal data class QuizResultListViewModelState(
     val quizId: ObjectId? = null,
     val quizTitle: String? = null,
     val data: List<QuizResultListing>? = null,
-) : ViewModelState
+) {
+    val screenIsBusy = loading.isInProgress
+}
 
 @HiltViewModel
 class QuizResultListViewModel @Inject constructor(
@@ -112,7 +108,7 @@ class QuizResultListViewModel @Inject constructor(
 
     // Used to get results when requesting results for a quiz rather than a user
     private val quizResultRepository: QuizResultRepository
-) : ViewModel() {
+) : ViewModel(), UiStateSource {
     // API currently only allows viewing the resultlist for a user
     // when they are that user (through /users/me/results),
     // private val userId: String? = savedStateHandle.get("user")
@@ -121,29 +117,18 @@ class QuizResultListViewModel @Inject constructor(
     private val quizId: ObjectId? = savedStateHandle.get<String>("quiz")?.let { ObjectId(it) }
 
     private var refreshJob: Job? = null
-    private val state = MutableStateFlow(QuizResultListViewModelState(quizId = quizId))
 
-    val uiState = state
-        .map { QuizResultListUiState.fromViewModelState(it) }
-        .stateIn(
-            viewModelScope,
-            SharingStarted.Eagerly,
-            QuizResultListUiState.fromViewModelState(state.value)
-        )
+    private var state by mutableStateOf(QuizResultListViewModelState(quizId = quizId))
 
-    init {
-        // For now because of API limitations, do not check given ids,
-        // just assume null quizId means fetch profile
+    override val uiState by derivedStateOf { QuizResultListUiState.fromViewModelState(state) }
+
+//    init {
+    // For now because of API limitations, do not check given ids,
+    // just assume null quizId means fetch profile
 //        check(userId != null || quizId != null) {
 //            "Must pass either a user or quiz id in SavedStateHandle"
 //        }
-
-        // Do initial load of data
-        state.update {
-            it.copy(loading = true)
-        }
-        getData()
-    }
+//    }
 
     /**
      * Refreshes the stored quiz result list data.
@@ -151,19 +136,16 @@ class QuizResultListViewModel @Inject constructor(
      * Cannot be called when there is already loading happening.
      */
     fun refresh() {
-        // Do not allow refresh while already loading or refreshing
-        if (state.value.loading) {
+        if (state.screenIsBusy) {
             return
         }
 
-        state.update {
-            it.copy(loading = true)
-        }
-
-        getData()
+        loadQuizResults()
     }
 
-    private fun getData() {
+    private fun loadQuizResults() {
+        state = state.copy(loading = LoadingState.InProgress)
+
         refreshJob?.cancel()
 
         if (quizId == null) {
@@ -177,13 +159,18 @@ class QuizResultListViewModel @Inject constructor(
     private fun getResultsForUser() {
         refreshJob = viewModelScope.launch {
             userRepository.getResults()
-                .onEach {
-                    handleRefreshResult(it)
+                .catch { emit(handleLoadException(it)) }
+                .map { handleLoadResult(it) }
+                .collect { nextState ->
+                    delay(LOAD_DELAY_MILLI)
+                    state = nextState
+                    if (nextState.loading is LoadingState.Error) {
+                        cancel()
+                    }
                 }
-                .catch {
-                    handleRefreshException()
-                }
-                .collect()
+
+            ensureActive()
+            state = state.copy(loading = LoadingState.Success())
         }
     }
 
@@ -206,87 +193,57 @@ class QuizResultListViewModel @Inject constructor(
         }
     }
 
-    private suspend fun getQuizListingAsState(quizId: ObjectId) =
+    private suspend fun getQuizListingAsState(quizId: ObjectId) = coroutineScope {
         quizRepository.getAsListing(quizId)
-            .onEach {
-                handleQuizListingResult(it)
+            .catch { emit(handleLoadException(it)) }
+            .map { handleQuizListingResult(it) }
+            .collect { nextState ->
+                state = nextState
+                if (nextState.loading is LoadingState.Error) {
+                    cancel()
+                }
             }
-            .catch {}
-            .collect()
+    }
 
-    private fun handleQuizListingResult(result: Result<QuizListing, Any?>) {
-        when (result) {
-            is Result.Success -> state.update {
-                it.copy(
-                    quizTitle = result.value.title,
-                    loading = false,
-                )
-            }
-            is Result.Unauthorized -> state.update {
-                QuizResultListViewModelState(unauthorized = true)
-            }
-            is Result.Forbidden -> state.update {
-                QuizResultListViewModelState(
-                    error = ErrorStrings.FORBIDDEN.message,
-                    loading = false,
-                )
-            }
-            else -> {
-                // Ignore other errors because we only want some data that can
-                // is acceptable to substitute with defaults (like title)
-            }
+    private fun handleQuizListingResult(result: ResultOrFailure<QuizListing>): QuizResultListViewModelState {
+        // Check result and update state with title when success.
+        // We don't set loading or refreshing because this isn't the primary data.
+        return when (result) {
+            is Result.Success -> state.copy(quizTitle = result.value.title)
+            is Result.Failure ->
+                // Only care about errors that indicate the rest of the data would also fail
+                // to load (such as Unauthorized, Forbidden)
+                if (result.reason == FailureReason.FORBIDDEN) {
+                    QuizResultListViewModelState(loading = LoadingState.Error(FailureReason.FORBIDDEN))
+                } else state
         }
     }
 
-    private suspend fun getQuizResultsAsState(quizId: ObjectId) =
+    private suspend fun getQuizResultsAsState(quizId: ObjectId) = coroutineScope {
         quizResultRepository.getAllListingsForQuiz(quizId)
-            .onEach {
-                handleRefreshResult(it)
+            .catch { emit(handleLoadException(it)) }
+            .map { handleLoadResult(it) }
+            .collect { nextState ->
+                delay(LOAD_DELAY_MILLI)
+                state = nextState
+                if (nextState.loading is LoadingState.Error) {
+                    cancel()
+                }
             }
-            .catch {
-                handleRefreshException()
-            }
-            .collect()
 
-    private fun handleRefreshResult(result: Result<List<QuizResultListing>, Any?>) {
+        ensureActive()
+        state = state.copy(loading = LoadingState.Success())
+    }
+
+    private fun handleLoadResult(result: ResultOrFailure<List<QuizResultListing>>): QuizResultListViewModelState =
         when (result) {
-            is Result.Success -> state.update {
-                it.copy(
-                    data = result.value,
-                    error = null,
-                    loading = false,
-                )
-            }
-            is Result.Unauthorized -> state.update {
-                QuizResultListViewModelState(unauthorized = true)
-            }
-            is Result.Forbidden -> state.update {
-                QuizResultListViewModelState(
-                    error = ErrorStrings.FORBIDDEN.message,
-                    loading = false,
-                )
-            }
-            is Result.NotFound -> state.update {
-                QuizResultListViewModelState(
-                    error = ErrorStrings.NOT_FOUND.message,
-                    loading = false,
-                )
-            }
-            else -> state.update {
-                it.copy(
-                    error = ErrorStrings.NETWORK.message,
-                    loading = false,
-                )
-            }
+            is Result.Success -> state.copy(data = result.value)
+            is Result.Failure -> state.copy(loading = LoadingState.Error(result.reason))
         }
+
+    private fun handleLoadException(throwable: Throwable): Result.Failure<Nothing> {
+        // For now just always return a Result.Failure with UNKNOWN
+        return Result.Failure(FailureReason.UNKNOWN)
     }
 
-    private fun handleRefreshException() {
-        state.update {
-            it.copy(
-                error = ErrorStrings.UNKNOWN.message,
-                loading = false,
-            )
-        }
-    }
 }

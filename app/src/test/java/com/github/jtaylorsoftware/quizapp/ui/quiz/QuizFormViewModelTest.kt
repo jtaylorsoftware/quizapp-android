@@ -1,11 +1,11 @@
 package com.github.jtaylorsoftware.quizapp.ui.quiz
 
 import androidx.lifecycle.SavedStateHandle
+import com.github.jtaylorsoftware.quizapp.data.domain.FailureReason
 import com.github.jtaylorsoftware.quizapp.data.domain.FakeQuizRepository
 import com.github.jtaylorsoftware.quizapp.data.domain.FakeQuizResultRepository
 import com.github.jtaylorsoftware.quizapp.data.domain.QuizRepository
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
-import com.github.jtaylorsoftware.quizapp.data.domain.models.QuestionResponse
 import com.github.jtaylorsoftware.quizapp.data.network.FakeQuizNetworkSource
 import com.github.jtaylorsoftware.quizapp.data.network.FakeQuizResultNetworkSource
 import com.github.jtaylorsoftware.quizapp.data.network.NetworkResult
@@ -13,9 +13,9 @@ import com.github.jtaylorsoftware.quizapp.data.network.asForm
 import com.github.jtaylorsoftware.quizapp.data.network.dto.ApiError
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuestionDto
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizDto
-import com.github.jtaylorsoftware.quizapp.ui.ErrorStrings
 import com.github.jtaylorsoftware.quizapp.ui.LoadingState
-import io.mockk.*
+import io.mockk.coEvery
+import io.mockk.spyk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -55,6 +55,11 @@ class QuizFormViewModelTest {
         )
     )
 
+    // Runs a block of code on the current Form UiState in the ViewModel.
+    private fun <T> QuizFormViewModel.runAsForm(block: QuizFormUiState.Form.() -> T): T {
+        return (this.uiState as QuizFormUiState.Form).block()
+    }
+
     @Before
     fun beforeEach() {
         Dispatchers.setMain(StandardTestDispatcher())
@@ -77,11 +82,11 @@ class QuizFormViewModelTest {
         )
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizFormUiState.Form::class.java)
         )
         assertThat(
-            (viewModel.uiState.value as QuizFormUiState.Form).quiz.id,
+            (viewModel.uiState as QuizFormUiState.Form).quiz.id,
             `is`(quizId)
         )
     }
@@ -93,7 +98,7 @@ class QuizFormViewModelTest {
         )
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as QuizFormUiState.Form).responses,
+            (viewModel.uiState as QuizFormUiState.Form).responses,
             hasSize(quizDtos[0].questions.size)
         )
     }
@@ -106,36 +111,14 @@ class QuizFormViewModelTest {
         advanceUntilIdle()
 
         val newAnswer = "TEST"
-        viewModel.changeResponse(1, QuestionResponse.FillIn(newAnswer))
-        advanceUntilIdle()
-        assertThat(
-            ((viewModel.uiState.value as QuizFormUiState.Form)
-                .responses[1].response as QuestionResponse.FillIn).answer,
-            `is`(newAnswer)
-        )
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun `changeResponse should throw IllegalArgumentException if the response type doesn't match question type`() =
-        runTest {
-            viewModel = QuizFormViewModel(
-                savedState, repository, FakeQuizResultRepository(), Dispatchers.Main
+        viewModel.runAsForm {
+            (responses[1] as FormResponseState.FillIn).changeAnswer(newAnswer)
+            advanceUntilIdle()
+            assertThat(
+                (responses[1] as FormResponseState.FillIn).answer.text,
+                `is`(newAnswer)
             )
-            advanceUntilIdle()
-
-            viewModel.changeResponse(1, QuestionResponse.MultipleChoice(0))
-            advanceUntilIdle()
         }
-
-    @Test(expected = IndexOutOfBoundsException::class)
-    fun `changeResponse should throw IndexOOBE if the index is out of bounds`() = runTest {
-        viewModel = QuizFormViewModel(
-            savedState, repository, FakeQuizResultRepository(), Dispatchers.Main
-        )
-        advanceUntilIdle()
-
-        viewModel.changeResponse(-1, QuestionResponse.MultipleChoice(0))
-        advanceUntilIdle()
     }
 
     @Test
@@ -146,58 +129,39 @@ class QuizFormViewModelTest {
         advanceUntilIdle()
 
         val newAnswer = "" // use empty string
-        viewModel.changeResponse(1, QuestionResponse.FillIn(newAnswer))
-        advanceUntilIdle()
-        assertThat(
-            ((viewModel.uiState.value as QuizFormUiState.Form)
-                .responses[1].response as QuestionResponse.FillIn).answer,
-            `is`(newAnswer)
-        )
-        assertThat(
-            (viewModel.uiState.value as QuizFormUiState.Form).responses[1].error,
-            `is`(notNullValue())
-        )
-    }
-
-    @Test
-    fun `changeResponse should validate MultipleChoice choice`() = runTest {
-        viewModel = QuizFormViewModel(
-            savedState, repository, FakeQuizResultRepository(), Dispatchers.Main
-        )
-        advanceUntilIdle()
-
-        viewModel.changeResponse(0, QuestionResponse.MultipleChoice(-1))
-        advanceUntilIdle()
-        assertThat(
-            (viewModel.uiState.value as QuizFormUiState.Form).responses[0].error,
-            `is`(notNullValue())
-        )
-    }
-
-    @Test
-    fun `submit should call onSuccess when submit succeeds`() = runTest {
-        viewModel = QuizFormViewModel(
-            savedState, repository, FakeQuizResultRepository(), Dispatchers.Main
-        )
-        advanceUntilIdle()
-
-        // Add responses
-        viewModel.changeResponse(0, QuestionResponse.MultipleChoice(0))
-        viewModel.changeResponse(1, QuestionResponse.FillIn("Ansewr"))
-
-        val onSuccess = mockk<() -> Unit>()
-        justRun { onSuccess() }
-        viewModel.submit(onSuccess)
-        advanceUntilIdle()
-
-        verify(exactly = 1) {
-            onSuccess()
+        viewModel.runAsForm {
+            (responses[1] as FormResponseState.FillIn).changeAnswer(newAnswer)
+            advanceUntilIdle()
+            assertThat(
+                (responses[1] as FormResponseState.FillIn).answer.error,
+                `is`(notNullValue())
+            )
         }
-        confirmVerified(onSuccess)
     }
 
     @Test
-    fun `submit set uiState loading to error when quiz is expired`() = runTest {
+    fun `upload should set uploadStatus to success when upload succeeds`() = runTest {
+        viewModel = QuizFormViewModel(
+            savedState, repository, FakeQuizResultRepository(), Dispatchers.Main
+        )
+        advanceUntilIdle()
+
+        viewModel.runAsForm {
+            (responses[0] as FormResponseState.MultipleChoice).choice = 0
+            (responses[1] as FormResponseState.FillIn).changeAnswer("Answer")
+        }
+
+        viewModel.uploadResponses()
+        advanceUntilIdle()
+
+        assertThat(
+            (viewModel.uiState as QuizFormUiState.Form).uploadStatus,
+            IsInstanceOf(LoadingState.Success::class.java)
+        )
+    }
+
+    @Test
+    fun `upload set uiState loading to error when quiz is expired`() = runTest {
         val resultNetworkSource = FakeQuizResultNetworkSource()
         resultNetworkSource.failOnNextWith(
             NetworkResult.HttpError(
@@ -213,28 +177,22 @@ class QuizFormViewModelTest {
         )
         advanceUntilIdle()
 
-        // Add responses
-        viewModel.changeResponse(0, QuestionResponse.MultipleChoice(0))
-        viewModel.changeResponse(1, QuestionResponse.FillIn("Ansewr"))
+        viewModel.runAsForm {
+            (responses[0] as FormResponseState.MultipleChoice).choice = 0
+            (responses[1] as FormResponseState.FillIn).changeAnswer("Answer")
+        }
 
-        val onSuccess = mockk<() -> Unit>()
-        justRun { onSuccess() }
-        viewModel.submit(onSuccess)
+        viewModel.uploadResponses()
         advanceUntilIdle()
 
-        verify(exactly = 0) {
-            onSuccess()
-        }
-        confirmVerified(onSuccess)
-
         assertThat(
-            viewModel.uiState.value.loading,
+            (viewModel.uiState as QuizFormUiState.Form).uploadStatus,
             IsInstanceOf(LoadingState.Error::class.java)
         )
     }
 
     @Test
-    fun `submit set uiState to RequireSignIn when repository returns unauthorized`() = runTest {
+    fun `upload set uploadStatus to Error when repository returns unauthorized`() = runTest {
         val resultNetworkSource = FakeQuizResultNetworkSource()
         resultNetworkSource.failOnNextWith(NetworkResult.HttpError(401))
         viewModel = QuizFormViewModel(
@@ -245,48 +203,38 @@ class QuizFormViewModelTest {
         )
         advanceUntilIdle()
 
-        // Add responses
-        viewModel.changeResponse(0, QuestionResponse.MultipleChoice(0))
-        viewModel.changeResponse(1, QuestionResponse.FillIn("Ansewr"))
+        viewModel.runAsForm {
+            (responses[0] as FormResponseState.MultipleChoice).choice = 0
+            (responses[1] as FormResponseState.FillIn).changeAnswer("Answer")
+        }
 
-        val onSuccess = mockk<() -> Unit>()
-        justRun { onSuccess() }
-        viewModel.submit(onSuccess)
+        viewModel.uploadResponses()
         advanceUntilIdle()
 
-        verify(exactly = 0) {
-            onSuccess()
-        }
-        confirmVerified(onSuccess)
-
         assertThat(
-            viewModel.uiState.value,
-            IsInstanceOf(QuizFormUiState.RequireSignIn::class.java)
+            (viewModel.uiState as QuizFormUiState.Form).uploadStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
         )
     }
 
     @Test
-    fun `submit should validate the responses and not submit when there are errors`() = runTest {
+    fun `upload should validate the responses and not upload when there are errors`() = runTest {
         viewModel = QuizFormViewModel(
             savedState, repository, FakeQuizResultRepository(), Dispatchers.Main
         )
         advanceUntilIdle()
 
-        val onSuccess = mockk<() -> Unit>()
-        justRun { onSuccess() }
-
         // Never added any responses, so this call should fail
-        viewModel.submit(onSuccess)
+        viewModel.uploadResponses()
         advanceUntilIdle()
 
-        verify(exactly = 0) {
-            onSuccess()
-        }
-        confirmVerified(onSuccess)
-
         assertThat(
-            (viewModel.uiState.value.loading as LoadingState.Error).message,
-            containsString("fix form")
+            (viewModel.uiState as QuizFormUiState.Form).uploadStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
+        )
+        assertThat(
+            ((viewModel.uiState as QuizFormUiState.Form).uploadStatus as LoadingState.Error).message,
+            `is`(FailureReason.FORM_HAS_ERRORS)
         )
     }
 
@@ -314,11 +262,11 @@ class QuizFormViewModelTest {
         )
         advanceTimeBy(100)
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizFormUiState.NoQuiz::class.java)
         )
         assertThat(
-            viewModel.uiState.value.loading,
+            viewModel.uiState.loading,
             IsInstanceOf(LoadingState.InProgress::class.java)
         )
     }
@@ -333,12 +281,12 @@ class QuizFormViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizFormUiState.NoQuiz::class.java)
         )
         assertThat(
-            (viewModel.uiState.value.loading as LoadingState.Error).message,
-            `is`(ErrorStrings.NOT_FOUND.message)
+            (viewModel.uiState.loading as LoadingState.Error).message,
+            `is`(FailureReason.NOT_FOUND)
         )
     }
 
@@ -352,17 +300,17 @@ class QuizFormViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizFormUiState.NoQuiz::class.java)
         )
         assertThat(
-            (viewModel.uiState.value.loading as LoadingState.Error).message,
-            `is`(ErrorStrings.FORBIDDEN.message)
+            (viewModel.uiState.loading as LoadingState.Error).message,
+            `is`(FailureReason.FORBIDDEN)
         )
     }
 
     @Test
-    fun `should set uiState to RequireSignIn when load quiz results in unauthorized`() = runTest {
+    fun `should set uiState loading to Error when load quiz results in unauthorized`() = runTest {
         networkSource.failOnNextWith(NetworkResult.HttpError(401))
 
         viewModel = QuizFormViewModel(
@@ -371,11 +319,10 @@ class QuizFormViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            viewModel.uiState.value,
-            IsInstanceOf(QuizFormUiState.RequireSignIn::class.java)
+            viewModel.uiState.loading,
+            IsInstanceOf(LoadingState.Error::class.java)
         )
     }
-
 
     @Test
     fun `should set uiState to NoQuiz with error when load quiz results in network error`() =
@@ -388,12 +335,12 @@ class QuizFormViewModelTest {
             advanceUntilIdle()
 
             assertThat(
-                viewModel.uiState.value,
+                viewModel.uiState,
                 IsInstanceOf(QuizFormUiState.NoQuiz::class.java)
             )
             assertThat(
-                (viewModel.uiState.value.loading as LoadingState.Error).message,
-                `is`(ErrorStrings.NETWORK.message)
+                (viewModel.uiState.loading as LoadingState.Error).message,
+                `is`(FailureReason.NETWORK)
             )
         }
 
@@ -408,12 +355,12 @@ class QuizFormViewModelTest {
             advanceUntilIdle()
 
             assertThat(
-                viewModel.uiState.value,
+                viewModel.uiState,
                 IsInstanceOf(QuizFormUiState.NoQuiz::class.java)
             )
             assertThat(
-                (viewModel.uiState.value.loading as LoadingState.Error).message,
-                `is`(ErrorStrings.UNKNOWN.message)
+                (viewModel.uiState.loading as LoadingState.Error).message,
+                `is`(FailureReason.UNKNOWN)
             )
         }
 }

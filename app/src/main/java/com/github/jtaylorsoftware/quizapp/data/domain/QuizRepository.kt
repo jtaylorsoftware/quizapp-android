@@ -24,19 +24,19 @@ interface QuizRepository {
     /**
      * Gets a single Quiz.
      */
-    suspend fun getQuiz(id: ObjectId): Result<Quiz, Any?>
+    suspend fun getQuiz(id: ObjectId): ResultOrFailure<Quiz>
 
     /**
      * Gets a single QuizListing.
      *
      * @return A Flow that may emit multiple times if fresher data can be made available.
      */
-    fun getAsListing(id: ObjectId): Flow<Result<QuizListing, Any?>>
+    fun getAsListing(id: ObjectId): Flow<ResultOrFailure<QuizListing>>
 
     /**
      * Gets a QuizForm that the user can use to submit responses to a Quiz.
      */
-    suspend fun getFormForQuiz(id: ObjectId): Result<QuizForm, Any?>
+    suspend fun getFormForQuiz(id: ObjectId): ResultOrFailure<QuizForm>
 
     /**
      * Allows a user to submit a new Quiz.
@@ -51,7 +51,7 @@ interface QuizRepository {
     /**
      * Deletes an existing Quiz created by the current user.
      */
-    suspend fun deleteQuiz(id: ObjectId): Result<Unit, Any?>
+    suspend fun deleteQuiz(id: ObjectId): ResultOrFailure<Unit>
 }
 
 data class QuizValidationErrors(
@@ -76,17 +76,17 @@ class QuizRepositoryImpl @Inject constructor(
     private val networkSource: QuizNetworkSource,
     @AppMainScope private val externalScope: CoroutineScope = MainScope()
 ) : QuizRepository {
-    override suspend fun getQuiz(id: ObjectId): Result<Quiz, Any?> =
+    override suspend fun getQuiz(id: ObjectId): ResultOrFailure<Quiz> =
         when (val result = networkSource.getById(id.value)) {
             is NetworkResult.Success -> {
                 Result.success(Quiz.fromDto(result.value))
             }
             is NetworkResult.HttpError -> handleGenericHttpError(result)
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.Failure(FailureReason.NETWORK)
+            else -> Result.Failure(FailureReason.UNKNOWN)
         }
 
-    override fun getAsListing(id: ObjectId): Flow<Result<QuizListing, Any?>> = flow {
+    override fun getAsListing(id: ObjectId): Flow<ResultOrFailure<QuizListing>> = flow {
         databaseSource.getById(id.value)?.let {
             emit(Result.success(QuizListing.fromEntity(it)))
         }
@@ -100,20 +100,20 @@ class QuizRepositoryImpl @Inject constructor(
                 Result.success(listing)
             }
             is NetworkResult.HttpError -> handleGenericHttpError(networkResult)
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.Failure(FailureReason.NETWORK)
+            else -> Result.Failure(FailureReason.UNKNOWN)
         }
         emit(result)
     }
 
-    override suspend fun getFormForQuiz(id: ObjectId): Result<QuizForm, Any?> =
+    override suspend fun getFormForQuiz(id: ObjectId): ResultOrFailure<QuizForm> =
         when (val result = networkSource.getForm(id.value)) {
             is NetworkResult.Success -> {
                 Result.success(QuizForm.fromDto(result.value))
             }
             is NetworkResult.HttpError -> handleGenericHttpError(result)
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.Failure(FailureReason.NETWORK)
+            else -> Result.Failure(FailureReason.UNKNOWN)
         }
 
     override suspend fun createQuiz(quiz: Quiz): Result<ObjectId, QuizValidationErrors> =
@@ -130,8 +130,8 @@ class QuizRepositoryImpl @Inject constructor(
                 result
             }
             is NetworkResult.HttpError -> handleQuizHttpError(networkResult, quiz.questions.size)
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.Failure(FailureReason.NETWORK)
+            else -> Result.Failure(FailureReason.UNKNOWN)
         }
 
     override suspend fun editQuiz(id: ObjectId, edits: Quiz): Result<Unit, QuizValidationErrors> =
@@ -146,11 +146,11 @@ class QuizRepositoryImpl @Inject constructor(
                 Result.success()
             }
             is NetworkResult.HttpError -> handleQuizHttpError(result, edits.questions.size)
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.Failure(FailureReason.NETWORK)
+            else -> Result.Failure(FailureReason.UNKNOWN)
         }
 
-    override suspend fun deleteQuiz(id: ObjectId): Result<Unit, Any?> =
+    override suspend fun deleteQuiz(id: ObjectId): ResultOrFailure<Unit> =
         when (val result = withContext(externalScope.coroutineContext + NonCancellable) {
             networkSource.delete(id.value)
         }) {
@@ -160,27 +160,30 @@ class QuizRepositoryImpl @Inject constructor(
                 Result.success()
             }
             is NetworkResult.HttpError -> handleGenericHttpError(result)
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.Failure(FailureReason.NETWORK)
+            else -> Result.Failure(FailureReason.UNKNOWN)
         }
 
-    private fun <T> handleGenericHttpError(httpError: NetworkResult.HttpError): Result<T, Nothing> =
+    private fun handleGenericHttpError(httpError: NetworkResult.HttpError): Result<Nothing, Nothing> =
         when (httpError.code) {
-            HTTP_UNAUTHORIZED -> Result.Unauthorized
-            HTTP_FORBIDDEN -> Result.Forbidden
-            HTTP_NOT_FOUND -> Result.NotFound
-            else -> Result.NetworkError
+            HTTP_UNAUTHORIZED -> Result.Failure(FailureReason.UNAUTHORIZED)
+            HTTP_FORBIDDEN -> Result.Failure(FailureReason.FORBIDDEN)
+            HTTP_NOT_FOUND -> Result.Failure(FailureReason.NOT_FOUND)
+            else -> Result.Failure(FailureReason.NETWORK)
         }
 
     private suspend fun <T> handleQuizHttpError(
         result: NetworkResult.HttpError,
         numQuestions: Int
     ): Result<T, QuizValidationErrors> = when (result.code) {
-        HTTP_BAD_REQUEST -> Result.BadRequest(parseApiErrors(result.errors, numQuestions))
-        HTTP_UNAUTHORIZED -> Result.Unauthorized
-        HTTP_FORBIDDEN -> Result.Forbidden
-        HTTP_NOT_FOUND -> Result.NotFound
-        else -> Result.NetworkError
+        HTTP_BAD_REQUEST -> Result.Failure(
+            FailureReason.FORM_HAS_ERRORS,
+            parseApiErrors(result.errors, numQuestions)
+        )
+        HTTP_UNAUTHORIZED -> Result.Failure(FailureReason.UNAUTHORIZED)
+        HTTP_FORBIDDEN -> Result.Failure(FailureReason.FORBIDDEN)
+        HTTP_NOT_FOUND -> Result.Failure(FailureReason.NOT_FOUND)
+        else -> Result.Failure(FailureReason.NETWORK)
     }
 
     private suspend fun parseApiErrors(

@@ -69,9 +69,8 @@ class UserAuthServiceTest {
         val reg = UserRegistration("username", "email@email.com", "password")
         val result = service.registerUser(reg)
 
-        assertThat(result, IsInstanceOf(Result.BadRequest::class.java))
         assertThat(
-            (result as Result.BadRequest).error,
+            (result as Result.Failure).errors,
             `is`(UserRegistrationErrors(username = message, email = message, password = message))
         )
     }
@@ -99,9 +98,8 @@ class UserAuthServiceTest {
         val creds = UserCredentials("username", "password")
         val result = service.signInUser(creds)
 
-        assertThat(result, IsInstanceOf(Result.BadRequest::class.java))
         assertThat(
-            (result as Result.BadRequest).error,
+            (result as Result.Failure).errors,
             `is`(UserCredentialErrors(username = message, password = message))
         )
     }
@@ -117,9 +115,8 @@ class UserAuthServiceTest {
         networkSource.failOnNextWith(error)
 
         val result = service.changeEmail("email@email.com")
-        assertThat(result, IsInstanceOf(Result.BadRequest::class.java))
         assertThat(
-            (result as Result.BadRequest).error,
+            (result as Result.Failure).errors?.email,
             `is`(message)
         )
     }
@@ -135,9 +132,8 @@ class UserAuthServiceTest {
         networkSource.failOnNextWith(error)
 
         val result = service.changePassword("password")
-        assertThat(result, IsInstanceOf(Result.BadRequest::class.java))
         assertThat(
-            (result as Result.BadRequest).error,
+            (result as Result.Failure).errors?.password,
             `is`(message)
         )
     }

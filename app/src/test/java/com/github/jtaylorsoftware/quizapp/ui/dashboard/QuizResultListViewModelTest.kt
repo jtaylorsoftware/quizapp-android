@@ -17,6 +17,7 @@ import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.*
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
@@ -82,6 +83,28 @@ class QuizResultListViewModelTest {
     }
 
     @Test
+    fun `should begin with LoadingState NotStarted and NoProfile`() = runTest {
+        val savedState = SavedStateHandle()
+        val viewModel = QuizResultListViewModel(
+            savedState,
+            userRepository,
+            quizRepository,
+            quizResultRepository
+        )
+
+        // Should first be Loading, before initial refresh
+        assertThat(
+            viewModel.uiState,
+            IsInstanceOf(QuizResultListUiState.NoQuizResults::class.java)
+        )
+
+        assertThat(
+            viewModel.uiState.loading,
+            IsInstanceOf(LoadingState.NotStarted::class.java)
+        )
+    }
+
+    @Test
     fun `refresh should load results for current user, when nothing is set in SavedStateHandle`() =
         runTest {
             val savedState = SavedStateHandle()
@@ -93,20 +116,11 @@ class QuizResultListViewModelTest {
                 quizResultRepository
             )
 
-            // Should first be Loading, before initial refresh
-            assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizResultListUiState.NoQuizResults::class.java)
-            )
-
+            viewModel.refresh()
             advanceUntilIdle()
-            assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizResultListUiState.ListForUser::class.java)
-            )
 
             assertThat(
-                (viewModel.uiState.value as QuizResultListUiState.ListForUser).data,
+                (viewModel.uiState as QuizResultListUiState.ListForUser).data,
                 containsInAnyOrder(*resultListingDtos.map { QuizResultListing.fromDto(it) }
                     .toTypedArray())
             )
@@ -124,32 +138,23 @@ class QuizResultListViewModelTest {
                 quizResultRepository
             )
 
-            // Should first be Loading, before initial refresh
-            assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizResultListUiState.NoQuizResults::class.java)
-            )
-
+            viewModel.refresh()
             advanceUntilIdle()
-            assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizResultListUiState.ListForQuiz::class.java)
-            )
 
             assertThat(
-                (viewModel.uiState.value as QuizResultListUiState.ListForQuiz).quizTitle,
+                (viewModel.uiState as QuizResultListUiState.ListForQuiz).quizTitle,
                 `is`(quizDtos[0].title)
             )
 
             assertThat(
-                (viewModel.uiState.value as QuizResultListUiState.ListForQuiz).data,
+                (viewModel.uiState as QuizResultListUiState.ListForQuiz).data,
                 containsInAnyOrder(*resultListingDtos.map { QuizResultListing.fromDto(it) }
                     .toTypedArray())
             )
         }
 
     @Test
-    fun `refresh should set uiState to Unauthorized, when refresh for user causes Http Unauthorized`() =
+    fun `refresh should set loading to Error, when refresh for user causes Http Unauthorized`() =
         runTest {
             val savedState = SavedStateHandle()
 //            savedState.set("user", userId.value)
@@ -160,7 +165,6 @@ class QuizResultListViewModelTest {
                     quizRepository,
                     quizResultRepository
                 )
-            advanceUntilIdle()
 
             // local cache has no value, so force error in network to cause Unauthorized
             userNetworkSource.failOnNextWith(NetworkResult.HttpError(401))
@@ -169,8 +173,8 @@ class QuizResultListViewModelTest {
             advanceUntilIdle()
 
             assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizResultListUiState.RequireSignIn::class.java)
+                viewModel.uiState.loading,
+                IsInstanceOf(LoadingState.Error::class.java)
             )
         }
 
@@ -186,7 +190,6 @@ class QuizResultListViewModelTest {
                     quizRepository,
                     quizResultRepository
                 )
-            advanceUntilIdle()
 
             // local cache has no value, so force error in network to cause Forbidden
             quizResultNetworkSource.failOnNextWith(NetworkResult.HttpError(403))
@@ -195,7 +198,7 @@ class QuizResultListViewModelTest {
             advanceUntilIdle()
 
             assertThat(
-                (viewModel.uiState.value as QuizResultListUiState.NoQuizResults).loading,
+                viewModel.uiState.loading,
                 IsInstanceOf(LoadingState.Error::class.java)
             )
         }
@@ -212,16 +215,16 @@ class QuizResultListViewModelTest {
                     quizRepository,
                     quizResultRepository
                 )
-            advanceUntilIdle()
 
             // local cache has no value, so force error in network to cause Not Found
             quizResultNetworkSource.failOnNextWith(NetworkResult.HttpError(404))
+
 
             viewModel.refresh()
             advanceUntilIdle()
 
             assertThat(
-                (viewModel.uiState.value as QuizResultListUiState.NoQuizResults).loading,
+                viewModel.uiState.loading,
                 IsInstanceOf(LoadingState.Error::class.java)
             )
         }
@@ -230,6 +233,7 @@ class QuizResultListViewModelTest {
     fun `refresh should do nothing if already refreshing data`() = runTest {
         val mockUserRepo = spyk(userRepository)
         coEvery { mockUserRepo.getResults() } coAnswers {
+            delay(1000)
             callOriginal()
         }
 
@@ -242,20 +246,21 @@ class QuizResultListViewModelTest {
             quizResultRepository
         )
 
-        // Finish initial load - call #1
-        advanceUntilIdle()
+        viewModel.refresh()
+        // Enter refresh
+        advanceTimeBy(100)
 
-        // Do first refresh - call #2, sets loading = true
+        // Try to call while still refreshing
         viewModel.refresh()
-        // Immediately try another - would be call #3
-        viewModel.refresh()
-        advanceUntilIdle()
 
         // Should be 2 calls
-        coVerify(exactly = 2) {
+        coVerify(exactly = 1) {
             mockUserRepo.getResults()
         }
         confirmVerified(mockUserRepo)
+
+        // Finish initial load - call #1
+        advanceUntilIdle()
     }
 
     @Test
@@ -280,12 +285,12 @@ class QuizResultListViewModelTest {
             quizResultRepository
         )
 
-        // Get initial load
+        viewModel.refresh()
         advanceUntilIdle()
 
         // Should be empty
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizResultListUiState.NoQuizResults::class.java)
         )
 
@@ -298,37 +303,31 @@ class QuizResultListViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            (viewModel.uiState.value as QuizResultListUiState.ListForUser).data,
+            (viewModel.uiState as QuizResultListUiState.ListForUser).data,
             containsInAnyOrder(*resultListingDtos.map { QuizResultListing.fromDto(it) }
                 .toTypedArray())
         )
     }
 
     @Test
-    fun `UiState is RequireSignIn if ViewModelState has unauthorized flag set`() = runTest {
-        val state = QuizResultListViewModelState(unauthorized = true)
-        val uiState = QuizResultListUiState.fromViewModelState(state)
-        assertThat(uiState, IsInstanceOf(QuizResultListUiState.RequireSignIn::class.java))
-    }
-
-    @Test
-    fun `UiState is NoQuizResults with Loading InProgress if ViewModelState isLoading and screen data is null`() = runTest {
-        val state = QuizResultListViewModelState(
-            loading = true,
-            data = null,
-        )
-        val uiState = QuizResultListUiState.fromViewModelState(state)
-        assertThat(
-            (uiState as QuizResultListUiState.NoQuizResults).loading,
-            IsInstanceOf(LoadingState.InProgress::class.java)
-        )
-    }
-
-    @Test
-    fun `UiState is NoQuizResults if ViewModelState not isLoading or unauthorized and screen data is null`() =
+    fun `UiState is NoQuizResults with Loading InProgress if ViewModelState isLoading and screen data is null`() =
         runTest {
             val state = QuizResultListViewModelState(
-                loading = false,
+                loading = LoadingState.InProgress,
+                data = null,
+            )
+            val uiState = QuizResultListUiState.fromViewModelState(state)
+            assertThat(
+                (uiState as QuizResultListUiState.NoQuizResults).loading,
+                IsInstanceOf(LoadingState.InProgress::class.java)
+            )
+        }
+
+    @Test
+    fun `UiState is NoQuizResults if ViewModelState loading not InProgress and screen data is null`() =
+        runTest {
+            val state = QuizResultListViewModelState(
+                loading = LoadingState.Success(),
                 data = null,
             )
             val uiState = QuizResultListUiState.fromViewModelState(state)
@@ -339,10 +338,10 @@ class QuizResultListViewModelTest {
         }
 
     @Test
-    fun `UiState is NoQuizResults if ViewModelState not isLoading or unauthorized and screen data is emptyList`() =
+    fun `UiState is NoQuizResults if ViewModelState not isLoading and screen data is emptyList`() =
         runTest {
             val state = QuizResultListViewModelState(
-                loading = false,
+                loading = LoadingState.Success(),
                 data = emptyList(),
             )
             val uiState = QuizResultListUiState.fromViewModelState(state)
@@ -353,10 +352,10 @@ class QuizResultListViewModelTest {
         }
 
     @Test
-    fun `UiState is ListForUser if not loading or other error, data is not null, and quizId is null`() =
+    fun `UiState is ListForUser if not loading or error, data is not null, and quizId is null`() =
         runTest {
             val state = QuizResultListViewModelState(
-                loading = false,
+                loading = LoadingState.Success(),
                 data = listOf(QuizResultListing()),
                 quizId = null
             )
@@ -371,7 +370,7 @@ class QuizResultListViewModelTest {
     fun `UiState is ListForQuiz if not loading or other error, data is not null, and quizId is not null`() =
         runTest {
             val state = QuizResultListViewModelState(
-                loading = false,
+                loading = LoadingState.Success(),
                 data = listOf(QuizResultListing()),
                 quizId = ObjectId("id123")
             )

@@ -3,13 +3,15 @@ package com.github.jtaylorsoftware.quizapp.ui.dashboard
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.github.jtaylorsoftware.quizapp.data.domain.models.*
+import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
-import org.junit.Assert.assertEquals
+import org.hamcrest.MatcherAssert.assertThat
+import org.hamcrest.Matchers.`is`
 import org.junit.Rule
 import org.junit.Test
 
 
-class ResultScreenTest {
+class QuizResultListScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -64,21 +66,57 @@ class ResultScreenTest {
     )
 
     @Test
-    fun resultList_shouldDisplayHeader() {
+    fun resultListForUser_shouldDisplayHeader() {
+        val uiState = QuizResultListUiState.ListForUser(
+            loading = LoadingState.NotStarted,
+            data = listings,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizResultListScreen(listings, {})
+                QuizResultListScreen(
+                    uiState = uiState,
+                    navigateToDetails = { _, _ -> },
+                )
             }
         }
 
-        composeTestRule.onNodeWithText("Your Quiz Results").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Your Quiz Results", substring = true, ignoreCase = true)
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun resultListForQuiz_shouldDisplayHeader() {
+        val uiState = QuizResultListUiState.ListForQuiz(
+            loading = LoadingState.NotStarted,
+            data = listings,
+            quizTitle = "TESTQUIZ"
+        )
+        composeTestRule.setContent {
+            QuizAppTheme {
+                QuizResultListScreen(
+                    uiState = uiState,
+                    navigateToDetails = { _, _ -> },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Results for quiz", substring = true, ignoreCase = true)
+            .assertIsDisplayed()
+        composeTestRule.onNodeWithText("TESTQUIZ", substring = true).assertIsDisplayed()
     }
 
     @Test
     fun resultList_hasResults_displaysAllResults() {
+        val uiState = QuizResultListUiState.ListForUser(
+            loading = LoadingState.NotStarted,
+            data = listings,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizResultListScreen(listings, {})
+                QuizResultListScreen(
+                    uiState = uiState,
+                    navigateToDetails = { _, _ -> },
+                )
             }
         }
 
@@ -96,21 +134,31 @@ class ResultScreenTest {
 
     @Test
     fun resultList_whenClickDetails_callsNavigateToResultDetails() {
-        var resultId: ObjectId? = null
-        val navigateToDetails: (ObjectId) -> Unit = {
-            resultId = it
+        var quizId: ObjectId? = null
+        var userId: ObjectId? = null
+        val navigateToDetails: (ObjectId, ObjectId) -> Unit = { quiz, user ->
+            quizId = quiz
+            userId = user
         }
 
+        val uiState = QuizResultListUiState.ListForUser(
+            loading = LoadingState.NotStarted,
+            data = listings,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizResultListScreen(listings.subList(0, 1), navigateToDetails)
+                QuizResultListScreen(
+                    uiState = uiState,
+                    navigateToDetails = navigateToDetails,
+                )
             }
         }
 
         // Press listing for details
         composeTestRule.onNodeWithText(listings[0].quizTitle, substring = true).performClick()
 
-        assertEquals(listings[0].quiz, requireNotNull(resultId))
+        assertThat(quizId, `is`(listings[0].quiz))
+        assertThat(userId, `is`(listings[0].user))
     }
 
     @Test

@@ -6,7 +6,6 @@ import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizResult
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizResultListing
 import com.github.jtaylorsoftware.quizapp.data.local.FakeQuizResultListingDatabaseSource
 import com.github.jtaylorsoftware.quizapp.data.local.QuizResultListingDatabaseSource
-import com.github.jtaylorsoftware.quizapp.data.local.entities.QuizResultListingEntity
 import com.github.jtaylorsoftware.quizapp.data.network.FakeQuizResultNetworkSource
 import com.github.jtaylorsoftware.quizapp.data.network.NetworkResult
 import com.github.jtaylorsoftware.quizapp.data.network.QuizResultNetworkSource
@@ -25,26 +24,28 @@ class FakeQuizResultRepository(
     override suspend fun getForQuizByUser(
         quiz: ObjectId,
         user: ObjectId
-    ): Result<QuizResult, Any?> =
+    ): ResultOrFailure<QuizResult> =
         when (val result = networkSource.getForQuizByUser(quiz.value, user.value)) {
             is NetworkResult.Success -> Result.success(QuizResult.fromDto(result.value))
             is NetworkResult.HttpError -> handleGenericHttpError(result)
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.Failure(FailureReason.NETWORK)
+            else -> Result.Failure(FailureReason.UNKNOWN)
         }
 
-    override suspend fun getAllForQuiz(quiz: ObjectId): Result<List<QuizResult>, Any?> =
+    override suspend fun getAllForQuiz(quiz: ObjectId): ResultOrFailure<List<QuizResult>> =
         when (val result = networkSource.getAllForQuiz(quiz.value)) {
-            is NetworkResult.Success -> Result.success(result.value.map { QuizResult.fromDto(it) })
+            is NetworkResult.Success -> Result.success(result.value.let { (results) ->
+                results.map { QuizResult.fromDto(it) }
+            })
             is NetworkResult.HttpError -> handleGenericHttpError(result)
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.Failure(FailureReason.NETWORK)
+            else -> Result.Failure(FailureReason.UNKNOWN)
         }
 
     override fun getListingForQuizByUser(
         quiz: ObjectId,
         user: ObjectId
-    ): Flow<Result<QuizResultListing, Any?>> = flow {
+    ): Flow<ResultOrFailure<QuizResultListing>> = flow {
         databaseSource.getByQuizAndUser(quiz.value, user.value)?.let {
             emit(Result.success(QuizResultListing.fromEntity(it)))
         }
@@ -56,14 +57,14 @@ class FakeQuizResultRepository(
                 Result.success(listing)
             }
             is NetworkResult.HttpError -> handleGenericHttpError(networkResult)
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.Failure(FailureReason.NETWORK)
+            else -> Result.Failure(FailureReason.UNKNOWN)
         }
         emit(result)
     }
 
 
-    override fun getAllListingsForQuiz(quiz: ObjectId): Flow<Result<List<QuizResultListing>, Any?>> =
+    override fun getAllListingsForQuiz(quiz: ObjectId): Flow<ResultOrFailure<List<QuizResultListing>>> =
         flow {
             emit(
                 Result.success(
@@ -74,12 +75,14 @@ class FakeQuizResultRepository(
             val result = when (val networkResult =
                 networkSource.getAllListingForQuiz(quiz.value)) {
                 is NetworkResult.Success -> {
-                    val listings = networkResult.value.map { QuizResultListing.fromDto(it) }
+                    val listings = networkResult.value.let { (results) ->
+                        results.map { QuizResultListing.fromDto(it) }
+                    }
                     Result.success(listings)
                 }
                 is NetworkResult.HttpError -> handleGenericHttpError(networkResult)
-                is NetworkResult.NetworkError -> Result.NetworkError
-                else -> Result.UnknownError
+                is NetworkResult.NetworkError -> Result.Failure(FailureReason.NETWORK)
+                else -> Result.Failure(FailureReason.UNKNOWN)
             }
             emit(result)
         }
@@ -87,23 +90,23 @@ class FakeQuizResultRepository(
     override suspend fun createResponseForQuiz(
         responses: List<QuestionResponse>,
         quiz: ObjectId
-    ): Result<ObjectId, ResponseValidationErrors>  =
+    ): Result<ObjectId, ResponseValidationErrors> =
         when (val result = networkSource.createResultForQuiz(
             QuizFormResponsesDto.fromDomain(responses),
             quiz.value
         )) {
             is NetworkResult.Success -> Result.success(ObjectId(result.value.id))
             is NetworkResult.HttpError -> handleResponseHttpError(result, responses.size)
-            is NetworkResult.NetworkError -> Result.NetworkError
-            else -> Result.UnknownError
+            is NetworkResult.NetworkError -> Result.Failure(FailureReason.NETWORK)
+            else -> Result.Failure(FailureReason.UNKNOWN)
         }
 
     private fun <T> handleGenericHttpError(httpError: NetworkResult.HttpError): Result<T, Nothing> =
         when (httpError.code) {
-            HttpURLConnection.HTTP_UNAUTHORIZED -> Result.Unauthorized
-            HttpURLConnection.HTTP_FORBIDDEN -> Result.Forbidden
-            HttpURLConnection.HTTP_NOT_FOUND -> Result.NotFound
-            else -> Result.NetworkError
+            HttpURLConnection.HTTP_UNAUTHORIZED -> Result.Failure(FailureReason.UNAUTHORIZED)
+            HttpURLConnection.HTTP_FORBIDDEN -> Result.Failure(FailureReason.FORBIDDEN)
+            HttpURLConnection.HTTP_NOT_FOUND -> Result.Failure(FailureReason.NOT_FOUND)
+            else -> Result.Failure(FailureReason.NETWORK)
         }
 
     private fun <T> handleResponseHttpError(
@@ -116,9 +119,10 @@ class FakeQuizResultRepository(
                 val expired = httpError.errors.any { it.field == "expiration" }
                 val message = httpError.errors[0].message
                 if (expired) {
-                    Result.Expired // Quiz is expired, can't respond
+                    Result.Failure(FailureReason.QUIZ_EXPIRED) // Quiz is expired, can't respond
                 } else {
-                    Result.BadRequest(
+                    Result.Failure(
+                        FailureReason.FORM_HAS_ERRORS,
                         ResponseValidationErrors(
                             answers = message,
                             answerErrors = List(numAnswers) { message },
@@ -127,8 +131,8 @@ class FakeQuizResultRepository(
                     )
                 }
             }
-            HttpURLConnection.HTTP_UNAUTHORIZED -> Result.Unauthorized
-            HttpURLConnection.HTTP_NOT_FOUND -> Result.NotFound
-            else -> Result.NetworkError
+            HttpURLConnection.HTTP_UNAUTHORIZED -> Result.Failure(FailureReason.UNAUTHORIZED)
+            HttpURLConnection.HTTP_NOT_FOUND -> Result.Failure(FailureReason.NOT_FOUND)
+            else -> Result.Failure(FailureReason.NETWORK)
         }
 }

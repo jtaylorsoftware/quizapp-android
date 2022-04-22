@@ -14,11 +14,12 @@ import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizResultDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.*
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.`is`
-import org.hamcrest.Matchers.containsInAnyOrder
+import org.hamcrest.Matchers.*
 import org.hamcrest.core.IsInstanceOf
 import org.junit.After
 import org.junit.Before
@@ -54,7 +55,7 @@ class QuizResultRepositoryTest {
 
     @Before
     fun beforeEach() {
-        Dispatchers.setMain(StandardTestDispatcher())
+        Dispatchers.setMain(UnconfinedTestDispatcher())
         databaseSource = FakeQuizResultListingDatabaseSource(resultListingEntities)
         networkSource = FakeQuizResultNetworkSource(resultDto)
         repository = QuizResultRepositoryImpl(databaseSource, networkSource)
@@ -86,7 +87,7 @@ class QuizResultRepositoryTest {
 
         val result = repository.getForQuizByUser(randomId(), randomId())
 
-        assertThat(result, IsInstanceOf(Result.Forbidden::class.java))
+        assertThat((result as Result.Failure).reason, `is`(FailureReason.FORBIDDEN))
     }
 
     @Test
@@ -108,21 +109,18 @@ class QuizResultRepositoryTest {
 
         val result = repository.getAllForQuiz(randomId())
 
-        assertThat(result, IsInstanceOf(Result.Forbidden::class.java))
+        assertThat((result as Result.Failure).reason, `is`(FailureReason.FORBIDDEN))
     }
 
     @Test
     fun `getListingForQuizByUser returns local then network result`() = runTest {
         val user = userIds[0]
         val quiz = quizIds[0]
-        val results = mutableListOf<Result<QuizResultListing, Any?>>()
-        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-            repository.getListingForQuizByUser(quiz, user).collect {
-                results.add(it)
-            }
+        val results = mutableListOf<ResultOrFailure<QuizResultListing>>()
+        repository.getListingForQuizByUser(quiz, user).collect {
+            results.add(it)
         }
 
-        job.cancel()
         assertThat(
             (results[0] as Result.Success).value,
             `is`(QuizResultListing.fromEntity(resultListingEntities.first { it.quiz == quiz.value && it.user == user.value }))
@@ -134,30 +132,50 @@ class QuizResultRepositoryTest {
     }
 
     @Test
+    fun `getListingForQuizByUser deletes local result when network returns Not Found`() = runTest {
+        val user = userIds[0]
+        val quiz = quizIds[0]
+        val results = mutableListOf<ResultOrFailure<QuizResultListing>>()
+        networkSource.failOnNextWith(NetworkResult.HttpError(404))
+        repository.getListingForQuizByUser(quiz, user).collect {
+            results.add(it)
+        }
+
+        // Should still retrieve the local data initially
+        assertThat(
+            (results[0] as Result.Success).value,
+            `is`(QuizResultListing.fromEntity(resultListingEntities.first { it.quiz == quiz.value && it.user == user.value }))
+        )
+
+        // Network error on a single result type should cause the second value to be an error
+        assertThat(results[1], IsInstanceOf(Result.Failure::class.java))
+
+        // Should also no longer have local data
+        assertThat(
+            databaseSource.getByQuizAndUser(quiz.value, user.value),
+            `is`(nullValue())
+        )
+    }
+
+    @Test
     fun `getListingForQuizByUser should fail with NotFound when neither source has listings`() =
         runTest {
-            val results = mutableListOf<Result<QuizResultListing, Any?>>()
-            val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-                repository.getListingForQuizByUser(randomId(), randomId()).collect {
-                    results.add(it)
-                }
+            val results = mutableListOf<ResultOrFailure<QuizResultListing>>()
+            repository.getListingForQuizByUser(randomId(), randomId()).collect {
+                results.add(it)
             }
 
-            job.cancel()
-            assertThat(results[0], IsInstanceOf(Result.NotFound::class.java))
+            assertThat((results[0] as Result.Failure).reason, `is`(FailureReason.NOT_FOUND))
         }
 
     @Test
     fun `getAllListingsForQuiz returns local then network result`() = runTest {
         val quiz = quizIds[0]
-        val results = mutableListOf<Result<List<QuizResultListing>, Any?>>()
-        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-            repository.getAllListingsForQuiz(quiz).collect {
-                results.add(it)
-            }
+        val results = mutableListOf<ResultOrFailure<List<QuizResultListing>>>()
+        repository.getAllListingsForQuiz(quiz).collect {
+            results.add(it)
         }
 
-        job.cancel()
         assertThat(
             (results[0] as Result.Success).value,
             containsInAnyOrder(*resultListingEntities.filter { it.quiz == quiz.value }
@@ -172,13 +190,39 @@ class QuizResultRepositoryTest {
     }
 
     @Test
-    fun `getAllListingsForQuiz should cache network result`() = runTest {
+    fun `getAllListingsForQuiz deletes local data when network returns emptyList`() = runTest {
         val quiz = quizIds[0]
-        val job = launch(UnconfinedTestDispatcher(testScheduler)) {
-            repository.getAllListingsForQuiz(quiz).collect()
+        val results = mutableListOf<ResultOrFailure<List<QuizResultListing>>>()
+
+        // Create networkSource with no data
+        networkSource = FakeQuizResultNetworkSource()
+        repository = QuizResultRepositoryImpl(databaseSource, networkSource)
+
+        repository.getAllListingsForQuiz(quiz).collect {
+            results.add(it)
         }
 
-        job.cancel()
+        // Should still retrieve initial local data
+        assertThat(
+            (results[0] as Result.Success).value,
+            containsInAnyOrder(*resultListingEntities.filter { it.quiz == quiz.value }
+                .map { QuizResultListing.fromEntity(it) }.toTypedArray())
+        )
+
+        // Network error should cause Result.Success with emptyList (because the request
+        // didn't actually fail, it just returned nothing)
+        assertThat((results[1] as Result.Success).value, `is`(empty()))
+        assertThat(
+            databaseSource.getAllByQuiz(quiz.value),
+            `is`(empty())
+        )
+    }
+
+    @Test
+    fun `getAllListingsForQuiz should cache network result`() = runTest {
+        val quiz = quizIds[0]
+        repository.getAllListingsForQuiz(quiz).collect()
+
         val results = databaseSource.getAllByQuiz(quiz.value)
         assertThat(
             results.map { QuizResultListing.fromEntity(it) },
@@ -210,6 +254,6 @@ class QuizResultRepositoryTest {
                 repository.createResponseForQuiz(listOf(QuestionResponse.FillIn()), ObjectId())
 
             // Should fail with expired=true
-            assertThat(result, IsInstanceOf(Result.Expired::class.java))
+            assertThat((result as Result.Failure).reason, `is`(FailureReason.QUIZ_EXPIRED))
         }
 }

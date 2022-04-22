@@ -1,20 +1,24 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.SavedStateHandle
-import com.github.jtaylorsoftware.quizapp.data.domain.FakeQuizResultRepository
-import com.github.jtaylorsoftware.quizapp.data.domain.QuizResultRepository
+import com.github.jtaylorsoftware.quizapp.data.domain.*
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
+import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
+import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizResult
+import com.github.jtaylorsoftware.quizapp.data.network.FakeQuizNetworkSource
 import com.github.jtaylorsoftware.quizapp.data.network.FakeQuizResultNetworkSource
 import com.github.jtaylorsoftware.quizapp.data.network.NetworkResult
+import com.github.jtaylorsoftware.quizapp.data.network.asForm
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizDto
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuizResultDto
-import com.github.jtaylorsoftware.quizapp.ui.ErrorStrings
 import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.spyk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.*
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.`is`
@@ -22,12 +26,13 @@ import org.hamcrest.core.IsInstanceOf
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
-import java.lang.IllegalStateException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class QuizResultDetailViewModelTest {
-    private lateinit var networkSource: FakeQuizResultNetworkSource
-    private lateinit var repository: QuizResultRepository
+    private lateinit var quizResultNetworkSource: FakeQuizResultNetworkSource
+    private lateinit var quizRepository: QuizRepository
+    private lateinit var quizNetworkSource: FakeQuizNetworkSource
+    private lateinit var quizResultRepository: QuizResultRepository
     private lateinit var viewModel: QuizResultDetailViewModel
 
     private val userId = ObjectId("aewirojadlkflzmdfakl")
@@ -47,8 +52,10 @@ class QuizResultDetailViewModelTest {
             this["quiz"] = quizDtos[0].id
             this["user"] = userId.value
         }
-        networkSource = FakeQuizResultNetworkSource(resultDtos)
-        repository = FakeQuizResultRepository(networkSource = networkSource)
+        quizResultNetworkSource = FakeQuizResultNetworkSource(resultDtos)
+        quizResultRepository = FakeQuizResultRepository(networkSource = quizResultNetworkSource)
+        quizNetworkSource = FakeQuizNetworkSource(quizDtos)
+        quizRepository = FakeQuizRepository(networkSource = quizNetworkSource)
     }
 
     @After
@@ -57,23 +64,94 @@ class QuizResultDetailViewModelTest {
     }
 
     @Test
-    fun `refresh should run immediately on ViewModel creation`() = runTest {
-        viewModel = QuizResultDetailViewModel(savedState, repository, Dispatchers.Main)
+    fun `should begin with LoadingState NotStarted and NoProfile`() = runTest {
+        viewModel = QuizResultDetailViewModel(savedState, quizRepository, quizResultRepository)
 
-        // First is loading
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
         )
 
-        // Then will be Loaded with data
+        assertThat(
+            viewModel.uiState.loading,
+            IsInstanceOf(LoadingState.NotStarted::class.java)
+        )
+    }
+
+    @Test
+    fun `refresh should set loading to InProgress and then load data`() = runTest {
+        val mockResultNetworkSource = spyk(quizResultNetworkSource)
+        coEvery { mockResultNetworkSource.getForQuizByUser(any(), any()) } coAnswers {
+            delay(1000)
+            NetworkResult.success(resultDtos[0])
+        }
+        val mockQuizNetworkSource = spyk(quizNetworkSource)
+        coEvery { mockQuizNetworkSource.getForm(any()) } coAnswers {
+            delay(1000)
+            NetworkResult.success(quizDtos[0].asForm())
+        }
+        quizRepository = FakeQuizRepository(networkSource = mockQuizNetworkSource)
+        quizResultRepository = FakeQuizResultRepository(networkSource = mockResultNetworkSource)
+        viewModel = QuizResultDetailViewModel(savedState, quizRepository, quizResultRepository)
+
+        viewModel.refresh()
+        advanceTimeBy(100)
+
+        assertThat(
+            viewModel.uiState,
+            IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
+        )
+        assertThat(
+            viewModel.uiState.loading,
+            IsInstanceOf(LoadingState.InProgress::class.java)
+        )
+
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizResultDetailUiState.QuizResultDetail::class.java)
         )
         assertThat(
-            (viewModel.uiState.value as QuizResultDetailUiState.QuizResultDetail).data.quiz.value,
+            (viewModel.uiState as QuizResultDetailUiState.QuizResultDetail).quizResult.quiz.value,
+            `is`(resultDtos[0].quiz)
+        )
+    }
+
+    @Test
+    fun `refresh should set not set loading to Success until both form and result have loaded`() = runTest {
+        val mockQuizNetworkSource = spyk(quizNetworkSource)
+        coEvery { mockQuizNetworkSource.getForm(any()) } coAnswers {
+            delay(1000)
+            NetworkResult.success(quizDtos[0].asForm())
+        }
+        val mockResultNetworkSource = spyk(quizResultNetworkSource)
+        coEvery { mockResultNetworkSource.getForQuizByUser(any(), any()) } coAnswers {
+            delay(2000)
+            NetworkResult.success(resultDtos[0])
+        }
+        quizRepository = FakeQuizRepository(networkSource = mockQuizNetworkSource)
+        viewModel = QuizResultDetailViewModel(savedState, quizRepository, quizResultRepository)
+
+        viewModel.refresh()
+        // Cause the form to load
+        advanceTimeBy(1000)
+
+        assertThat(
+            viewModel.uiState,
+            IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
+        )
+        assertThat(
+            viewModel.uiState.loading,
+            IsInstanceOf(LoadingState.InProgress::class.java)
+        )
+
+        advanceUntilIdle()
+        assertThat(
+            viewModel.uiState,
+            IsInstanceOf(QuizResultDetailUiState.QuizResultDetail::class.java)
+        )
+        assertThat(
+            (viewModel.uiState as QuizResultDetailUiState.QuizResultDetail).quizResult.quiz.value,
             `is`(resultDtos[0].quiz)
         )
     }
@@ -81,118 +159,79 @@ class QuizResultDetailViewModelTest {
     @Test
     fun `refresh should get fresh data from repository`() = runTest {
         // Make repository return nothing initially
-        networkSource = spyk(FakeQuizResultNetworkSource())
-        coEvery { networkSource.getForQuizByUser(any(),any()) } returns NetworkResult.HttpError(404)
+        quizResultNetworkSource = spyk(FakeQuizResultNetworkSource())
+        coEvery {
+            quizResultNetworkSource.getForQuizByUser(
+                any(),
+                any()
+            )
+        } returns NetworkResult.HttpError(404)
 
-        repository = FakeQuizResultRepository(networkSource = networkSource)
-        viewModel = QuizResultDetailViewModel(savedState, repository, Dispatchers.Main)
+        quizResultRepository = FakeQuizResultRepository(networkSource = quizResultNetworkSource)
+        viewModel = QuizResultDetailViewModel(savedState, quizRepository, quizResultRepository)
 
+        viewModel.refresh()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
         )
 
         // Then will be Loaded with data
         // Set up network to return new data
-        clearMocks(networkSource)
-        coEvery { networkSource.getForQuizByUser(any(),any()) } returns NetworkResult.success(resultDtos[0])
-        viewModel.refresh()
+        clearMocks(quizResultNetworkSource)
+        coEvery { quizResultNetworkSource.getForQuizByUser(any(), any()) } returns NetworkResult.success(
+            resultDtos[0]
+        )
 
+        viewModel.refresh()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizResultDetailUiState.QuizResultDetail::class.java)
         )
         assertThat(
-            (viewModel.uiState.value as QuizResultDetailUiState.QuizResultDetail).data.quiz.value,
+            (viewModel.uiState as QuizResultDetailUiState.QuizResultDetail).quizResult.quiz.value,
             `is`(resultDtos[0].quiz)
         )
     }
 
-    @Test
-    fun `refresh should set uiState to RequiresSignIn when repository returns unauthorized`() =
-        runTest {
-            networkSource.failOnNextWith(NetworkResult.HttpError(401))
-            viewModel = QuizResultDetailViewModel(savedState, repository, Dispatchers.Main)
 
+    @Test
+    fun `refresh should set UiState to NoQuizResult and loading to Error when quizRepository returns Failure`() =
+        runTest {
+            quizNetworkSource.failOnNextWith(NetworkResult.HttpError(403))
+            viewModel = QuizResultDetailViewModel(savedState, quizRepository, quizResultRepository)
+
+            viewModel.refresh()
             advanceUntilIdle()
 
             assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizResultDetailUiState.RequireSignIn::class.java)
+                viewModel.uiState,
+                IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
+            )
+            assertThat(
+                (viewModel.uiState.loading as LoadingState.Error).message,
+                `is`(FailureReason.FORBIDDEN)
             )
         }
 
     @Test
-    fun `refresh should set uiState to NoQuizResult when repository returns forbidden`() =
+    fun `refresh should set UiState to NoQuizResult and loading to Error when resultRepository returns Failure`() =
         runTest {
-            networkSource.failOnNextWith(NetworkResult.HttpError(403))
-            viewModel = QuizResultDetailViewModel(savedState, repository, Dispatchers.Main)
+            quizResultNetworkSource.failOnNextWith(NetworkResult.HttpError(403))
+            viewModel = QuizResultDetailViewModel(savedState, quizRepository, quizResultRepository)
 
+            viewModel.refresh()
             advanceUntilIdle()
 
             assertThat(
-                viewModel.uiState.value,
+                viewModel.uiState,
                 IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
             )
             assertThat(
-                (viewModel.uiState.value.loading as LoadingState.Error).message,
-                `is`(ErrorStrings.FORBIDDEN.message)
-            )
-        }
-
-    @Test
-    fun `refresh should set uiState to NoQuizResult when repository returns not found`() =
-        runTest {
-            networkSource.failOnNextWith(NetworkResult.HttpError(404))
-            viewModel = QuizResultDetailViewModel(savedState, repository, Dispatchers.Main)
-
-            advanceUntilIdle()
-
-            assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
-            )
-            assertThat(
-                (viewModel.uiState.value.loading as LoadingState.Error).message,
-                `is`(ErrorStrings.NOT_FOUND.message)
-            )
-        }
-
-    @Test
-    fun `refresh should set uiState to NoQuizResult when repository returns network error`() =
-        runTest {
-            networkSource.failOnNextWith(NetworkResult.NetworkError(IllegalStateException()))
-            viewModel = QuizResultDetailViewModel(savedState, repository, Dispatchers.Main)
-
-            advanceUntilIdle()
-
-            assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
-            )
-            assertThat(
-                (viewModel.uiState.value.loading as LoadingState.Error).message,
-                `is`(ErrorStrings.NETWORK.message)
-            )
-        }
-
-    @Test
-    fun `refresh should set uiState to NoQuizResult when repository returns unknown error`() =
-        runTest {
-            networkSource.failOnNextWith(NetworkResult.Unknown(IllegalStateException()))
-            viewModel = QuizResultDetailViewModel(savedState, repository, Dispatchers.Main)
-
-            advanceUntilIdle()
-
-            assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
-            )
-            assertThat(
-                (viewModel.uiState.value.loading as LoadingState.Error).message,
-                `is`(ErrorStrings.UNKNOWN.message)
+                (viewModel.uiState.loading as LoadingState.Error).message,
+                `is`(FailureReason.FORBIDDEN)
             )
         }
 
@@ -202,7 +241,7 @@ class QuizResultDetailViewModelTest {
             val savedState = SavedStateHandle().apply {
                 this["user"] = "abdef"
             }
-            viewModel = QuizResultDetailViewModel(savedState, repository, Dispatchers.Main)
+            viewModel = QuizResultDetailViewModel(savedState, quizRepository, quizResultRepository)
         }
 
     @Test(expected = IllegalArgumentException::class)
@@ -211,6 +250,33 @@ class QuizResultDetailViewModelTest {
             val savedState = SavedStateHandle().apply {
                 this["quiz"] = "abdef"
             }
-            viewModel = QuizResultDetailViewModel(savedState, repository, Dispatchers.Main)
+            viewModel = QuizResultDetailViewModel(savedState, quizRepository, quizResultRepository)
         }
+
+    @Test
+    fun `UiState should be NoQuizResult when either quizResult or quizForm is null`() = runTest {
+        var state = QuizResultDetailViewModelState(quizResult = QuizResult())
+        var uiState = QuizResultDetailUiState.fromViewModelState(state)
+        assertThat(
+            uiState,
+            IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
+        )
+
+        state = QuizResultDetailViewModelState(quizForm = QuizForm())
+        uiState = QuizResultDetailUiState.fromViewModelState(state)
+        assertThat(
+            uiState,
+            IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
+        )
+    }
+
+    @Test
+    fun `UiState should be QuizResultDetail when both quizResult and quizForm are non-null`() = runTest {
+        val state = QuizResultDetailViewModelState(quizResult = QuizResult(), quizForm = QuizForm())
+        val uiState = QuizResultDetailUiState.fromViewModelState(state)
+        assertThat(
+            uiState,
+            IsInstanceOf(QuizResultDetailUiState.QuizResultDetail::class.java)
+        )
+    }
 }

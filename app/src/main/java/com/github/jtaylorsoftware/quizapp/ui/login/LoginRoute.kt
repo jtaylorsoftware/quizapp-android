@@ -1,69 +1,59 @@
 package com.github.jtaylorsoftware.quizapp.ui.login
 
-import androidx.compose.material.Scaffold
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.ScaffoldState
 import androidx.compose.material.rememberScaffoldState
-import androidx.compose.runtime.*
-import com.github.jtaylorsoftware.quizapp.ui.LoadingState
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import com.github.jtaylorsoftware.quizapp.ui.components.AppScaffold
 
 /**
- * Controls top-level rendering for the sign-up navigation route, including the display
- * of SnackBars when appropriate. When the user
- * is not already signed in, this displays the [LoginScreen].
+ * Controls rendering for the login screen.
+ * When the user is already logged in, this redirects the user to the profile screen.
  *
- * @param navigateToProfile Callback invoked after successful login.
+ * @param onBackPressed Callback to invoke after user presses the back button on this screen.
+ *
  * @param navigateToSignUp Callback invoked when the user should be redirected to the sign-up screen.
  */
 @Composable
 fun LoginRoute(
     viewModel: LoginViewModel,
-    navigateToProfile: () -> Unit,
+    onBackPressed: () -> Unit,
     navigateToSignUp: () -> Unit,
-    scaffoldState: ScaffoldState = rememberScaffoldState()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    LoginRoute(
+        uiState = viewModel.uiState,
+        onUsernameChanged = viewModel::setUsername,
+        onPasswordChanged = viewModel::setPassword,
+        login = viewModel::login,
+        navigateToSignUp = navigateToSignUp,
+    )
 
-    when(uiState) {
-        is LoginUiState.SignedIn -> navigateToProfile()
-        is LoginUiState.Form -> (uiState as LoginUiState.Form).let {
-            ScaffoldedLoginScreen(
-                uiState = it,
-                viewModel = viewModel,
-                navigateToSignUp = navigateToSignUp,
-                scaffoldState = scaffoldState
-            )
-        }
+    BackHandler {
+        onBackPressed()
     }
 }
 
-/**
- * Wraps the [LoginScreen] in a Scaffold that will show a SnackBar depending
- * on the current error.
- */
 @Composable
-private fun ScaffoldedLoginScreen(
-    uiState: LoginUiState.Form,
-    viewModel: LoginViewModel,
+fun LoginRoute(
+    uiState: LoginUiState,
+    onUsernameChanged: (String) -> Unit,
+    onPasswordChanged: (String) -> Unit,
+    login: () -> Unit,
     navigateToSignUp: () -> Unit,
-    scaffoldState: ScaffoldState
+    scaffoldState: ScaffoldState = rememberScaffoldState()
 ) {
-    if (uiState.loading is LoadingState.Error){
-        LaunchedEffect(scaffoldState.snackbarHostState) {
-            scaffoldState.snackbarHostState.showSnackbar(
-                message = uiState.loading.message
-            )
-        }
-    }
-
-    Scaffold(
-        scaffoldState = scaffoldState
+    AppScaffold(
+        modifier = Modifier.testTag("LoginRoute"),
+        scaffoldState = scaffoldState,
+        uiState = uiState
     ) {
         LoginScreen(
-            usernameState = uiState.usernameState,
-            onUsernameChanged = viewModel::setUsername,
-            passwordState = uiState.passwordState,
-            onPasswordChanged = viewModel::setPassword,
-            login = { viewModel.login() },
+            uiState = uiState,
+            onUsernameChanged = onUsernameChanged,
+            onPasswordChanged = onPasswordChanged,
+            login = login,
             navigateToSignup = navigateToSignUp
         )
     }

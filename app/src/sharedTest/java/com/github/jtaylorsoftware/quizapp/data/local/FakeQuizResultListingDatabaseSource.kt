@@ -33,11 +33,11 @@ class FakeQuizResultListingDatabaseSource(
     }
 
     override suspend fun deleteByQuizAndUser(quiz: String, user: String) {
-        cache.entries.removeAll { (_, it) -> it.id == quiz && it.user == user }
+        cache.entries.removeAll { (_, it) -> it.quiz == quiz && it.user == user }
     }
 
     override suspend fun deleteAllByQuiz(quiz: String) {
-        cache.entries.removeAll { (_, it) -> it.id == quiz }
+        cache.entries.removeAll { (_, it) -> it.quiz == quiz }
     }
 
     override suspend fun deleteAllByUser(user: String) {

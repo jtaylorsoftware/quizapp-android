@@ -1,130 +1,102 @@
 package com.github.jtaylorsoftware.quizapp.ui.quiz
 
+import androidx.compose.runtime.*
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.jtaylorsoftware.quizapp.data.QuestionType
-import com.github.jtaylorsoftware.quizapp.data.domain.QuizRepository
-import com.github.jtaylorsoftware.quizapp.data.domain.QuizValidationErrors
-import com.github.jtaylorsoftware.quizapp.data.domain.Result
+import com.github.jtaylorsoftware.quizapp.data.domain.*
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
 import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
 import com.github.jtaylorsoftware.quizapp.data.domain.models.Quiz
 import com.github.jtaylorsoftware.quizapp.di.DefaultDispatcher
-import com.github.jtaylorsoftware.quizapp.ui.*
+import com.github.jtaylorsoftware.quizapp.ui.LoadingState
+import com.github.jtaylorsoftware.quizapp.ui.UiState
+import com.github.jtaylorsoftware.quizapp.ui.UiStateSource
 import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
-import com.github.jtaylorsoftware.quizapp.ui.quiz.QuizEditorUiState.*
+import com.github.jtaylorsoftware.quizapp.ui.isInProgress
 import com.github.jtaylorsoftware.quizapp.util.AllowedUsersValidator
 import com.github.jtaylorsoftware.quizapp.util.WaitGroup
+import com.github.jtaylorsoftware.quizapp.util.anyAsync
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.selects.whileSelect
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.util.*
 import javax.inject.Inject
+import kotlin.math.max
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * [UiState] that holds the representation for the [QuizEditorScreen].
- *
- * If creating a new Quiz, it will initially be [Creator].
- * When editing a Quiz, it will be [Editor] unless the given quizId cannot be used to find an
- * existing Quiz, in which case it will be [NoQuiz].
  */
 sealed interface QuizEditorUiState : UiState {
     /**
-     * `true` when we editing a previous quiz.
-     */
-    val editing: Boolean
-
-    /**
      * There was no quiz requested, so a blank Quiz is provided.
      */
-    data class Creator internal constructor(
+    data class Editor constructor(
         override val loading: LoadingState,
-        internal val viewModelState: QuizEditorViewModelState,
-    ) : QuizEditorUiState, QuizState by viewModelState {
-        override val editing: Boolean = false
-    }
 
-    /**
-     * The Editor is opened with a previous Quiz.
-     */
-    data class Editor internal constructor(
-        override val loading: LoadingState,
-        internal val viewModelState: QuizEditorViewModelState,
-    ) : QuizEditorUiState, QuizState by viewModelState {
-        override val editing: Boolean = true
-    }
+        /**
+         * Progress for submitting the Quiz.
+         */
+        val uploadStatus: LoadingState,
+
+        /**
+         * Whether or not the Editor was opened with a pre-existing Quiz.
+         */
+        val isEditing: Boolean,
+
+        val quizState: QuizState,
+    ) : QuizEditorUiState
 
     /**
      * A previous Quiz was requested but could not be loaded.
      */
     data class NoQuiz constructor(
         override val loading: LoadingState,
-    ) : QuizEditorUiState {
-        override val editing: Boolean = false
-    }
-
-    /**
-     * The user must sign in again to view this resource.
-     */
-    object RequireSignIn : QuizEditorUiState {
-        override val editing: Boolean = false
-        override val loading: LoadingState = LoadingState.Error(ErrorStrings.UNAUTHORIZED.message)
-    }
+    ) : QuizEditorUiState
 
     companion object {
         internal fun fromViewModelState(state: QuizEditorViewModelState): QuizEditorUiState = when {
-            state.unauthorized -> RequireSignIn
-            state.failedToLoad -> NoQuiz(state.loadingState)
-            state.quizId != null -> Editor(state.loadingState, state)
-            else -> Creator(state.loadingState, state)
+            state.loading.isInProgress || state.loading is LoadingState.Error -> NoQuiz(state.loading)
+            state.quizId != null -> Editor(
+                loading = state.loading,
+                uploadStatus = state.uploadStatus,
+                isEditing = true,
+                quizState = state.quizState
+            )
+            else -> Editor(
+                loading = state.loading,
+                uploadStatus = state.uploadStatus,
+                isEditing = false,
+                quizState = state.quizState
+            )
         }
     }
 }
 
 /**
- * Internal state for the QuizEditor's forms and fields. It implements [QuizState] methods by
- * delegating to the ViewModel.
+ * Internal state for the [QuizEditorViewModel]. In holds the general authorization
+ * state, the screen-specific loading and upload status, and the user's current edits
+ * for a Quiz.
  */
-internal class QuizEditorViewModelState(
-    internal val viewModel: QuizEditorViewModel,
+internal data class QuizEditorViewModelState(
+    val loading: LoadingState = LoadingState.NotStarted,
+    val uploadStatus: LoadingState = LoadingState.NotStarted,
+
+    /**
+     * The id of the Quiz loaded to edit. `null` if creating a new Quiz.
+     */
     val quizId: String? = null,
-    val failedToLoad: Boolean = false,
-    override val loading: Boolean = true,
-    val unauthorized: Boolean = false,
-    override val error: String? = null,
-    override val title: TextFieldState = TextFieldState(),
-    expiration: Instant = Instant.now().plus(1, ChronoUnit.DAYS),
-    isPublic: Boolean = true,
-    allowedUsers: String = "",
-    override val expirationError: String? = null,
-    override val allowedUsersError: String? = null,
-    override val questions: List<QuestionState> = emptyList(),
-    override val questionsError: String? = null, // Error for when there aren't enough questions
-) : ViewModelState, QuizState {
-    override var expiration: Instant = expiration
-        set(value) = viewModel.setExpiration(value)
 
-    override var isPublic: Boolean = isPublic
-        set(value) = viewModel.setIsPublic(value)
-
-    override var allowedUsers: String = allowedUsers
-        set(value) = viewModel.setAllowedUsers(value)
-
-    override fun setTitle(value: String) = viewModel.setTitle(value)
-
-    override fun addQuestion() = viewModel.addQuestion()
-
-    override fun changeQuestionType(index: Int, newType: QuestionType) =
-        viewModel.changeQuestionType(index, newType)
-
-    override fun changeQuestion(index: Int, newState: QuestionState) =
-        viewModel.changeQuestion(index, newState)
-
-    override fun deleteQuestion(index: Int) = viewModel.deleteQuestion(index)
+    /**
+     * The state for the editor screen (the user's current changes to the Quiz).
+     */
+    val quizState: QuizState,
+) {
+    val screenIsBusy: Boolean =
+        loading.isInProgress || uploadStatus.isInProgress
 }
 
 @HiltViewModel
@@ -132,97 +104,62 @@ class QuizEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val quizRepository: QuizRepository,
     @DefaultDispatcher private val dispatcher: CoroutineDispatcher,
-) : ViewModel() {
+) : ViewModel(), UiStateSource {
     private val quizId: ObjectId? = savedStateHandle.get<String>("quiz")?.let { ObjectId(it) }
     private val editing = quizId != null
 
     // Original expiration for an edited quiz (it's allowed to submit edits with untouched expiration)
-    private val originalExpiration = MutableStateFlow<Instant?>(null)
+    private var originalExpiration: Instant? by mutableStateOf(null)
 
     // Used for waiting on validation to finish before submitting quiz
     private val waitGroup = WaitGroup(viewModelScope + dispatcher)
 
-    private val state =
-        MutableStateFlow(QuizEditorViewModelState(viewModel = this, quizId = quizId?.value))
-
-    val uiState = state
-        .map {
-            QuizEditorUiState.fromViewModelState(it)
-        }
-        .stateIn(
-            viewModelScope,
-            SharingStarted.Eagerly,
-            QuizEditorUiState.fromViewModelState(
-                QuizEditorViewModelState(
-                    viewModel = this,
-                    quizId = quizId?.value
-                )
-            )
+    private var quizState by mutableStateOf(QuizStateHolder(), neverEqualPolicy())
+    private var state by mutableStateOf(
+        QuizEditorViewModelState(
+            quizId = quizId?.value,
+            quizState = quizState
         )
+    )
+    override val uiState by derivedStateOf { QuizEditorUiState.fromViewModelState(state) }
 
     init {
         if (editing) {
             loadQuiz()
-        } else {
-            state.update {
-                it.copy(loading = false)
-            }
         }
     }
 
     /**
-     * Validates and then attempts to upload the new or edited Quiz. When successful,
-     * this function immediately invokes [onSuccess] within the context of [Dispatchers.Main]
-     * without emitting a new value of [uiState].
+     * Validates and then attempts to upload the new or edited Quiz.
      */
-    fun submitQuiz(onSuccess: () -> Unit) {
+    fun uploadQuiz() {
         // If still loading initial data, or already submitting, don't try submit
-        if (state.value.loading) {
+        if (state.screenIsBusy) {
             return
         }
 
-        state.update {
-            it.copy(loading = true)
-        }
+        state = state.copy(uploadStatus = LoadingState.InProgress)
 
         viewModelScope.launch(dispatcher) {
             // Start a validation of the entire Quiz.
-            validateQuiz(state.value)
+            quizState.revalidate()
 
             // Try to wait for all validations to finish - because mutators don't run if
             // loading is `true` (which was set above), then waiting for all pending validations
             // should finish and let us know if there's errors
             try {
                 waitGroup.wait(1000.milliseconds)
-            } catch(e: TimeoutCancellationException) {
+            } catch (e: TimeoutCancellationException) {
                 // Validations didn't finish, to ensure prompt submission just let server validate it
             }
 
-            // Read validated state
-            val currentState = state.value
-
             // If quiz has errors that we know of, don't submit
-            if (quizHasErrors(currentState)) {
-                state.update {
-                    it.copy(loading = false)
-                }
+            if (quizState.hasErrors()) {
+                state = state.copy(uploadStatus = LoadingState.Error(FailureReason.FORM_HAS_ERRORS))
                 return@launch
             }
 
-            val quiz = currentState.run {
-                Quiz(
-                    date = Instant.now(),
-                    title = title.text,
-                    expiration = expiration,
-                    isPublic = isPublic,
-                    allowedUsers = AllowedUsersValidator.split(allowedUsers),
-                    questions = questions.map { when (it) {
-                        is QuestionState.Empty -> Question.Empty
-                        is QuestionState.FillIn -> it.data
-                        is QuestionState.MultipleChoice -> it.data
-                    } }
-                )
-            }
+            val quiz = quizState.data
 
             // Upload our quiz
             val result = if (editing) {
@@ -235,46 +172,22 @@ class QuizEditorViewModel @Inject constructor(
             }
 
             // Check for success or failure
-            handleSubmitResult(result, onSuccess)
+            handleUploadResult(result)
         }
     }
 
-    private suspend fun handleSubmitResult(result: Result<Any, QuizValidationErrors>, onSuccess: () -> Unit) {
+    private fun handleUploadResult(result: Result<Any, QuizValidationErrors>) {
         when (result) {
             is Result.Success -> {
-                withContext(Dispatchers.Main) {
-                    onSuccess()
-                }
+                state =
+                    state.copy(uploadStatus = LoadingState.Success(SuccessStrings.UPLOADED_QUIZ))
             }
-            is Result.BadRequest -> state.update {
-                it.copy(
-                    loading = false,
-                    error = "Please fix form errors.",
-                    allowedUsersError = result.error.allowedUsers,
-                    title = it.title.copy(error = result.error.title),
-                    questionsError = result.error.questions,
-                    expirationError = result.error.expiration
-                )
-            }
-            is Result.Unauthorized -> state.update {
-                it.copy(
-                    loading = false,
-                    unauthorized = true
-                )
-            }
-            is Result.Forbidden -> state.update {
-                it.copy(
-                    loading = false,
-                    failedToLoad = true,
-                    error = ErrorStrings.FORBIDDEN.message
-                )
-            }
-            else -> state.update {
-                it.copy(
-                    loading = false,
-                    failedToLoad = true,
-                    error = ErrorStrings.UNKNOWN.message
-                )
+            is Result.Failure -> {
+                quizState.allowedUsersError = result.errors?.allowedUsers
+                quizState.title = quizState.title.copy(error = result.errors?.title)
+                quizState.questionsError = result.errors?.questions
+                quizState.expirationError = result.errors?.expiration
+                state = state.copy(uploadStatus = LoadingState.Error(result.reason))
             }
         }
     }
@@ -292,415 +205,499 @@ class QuizEditorViewModel @Inject constructor(
         }
     }
 
-    private fun handleLoadResult(result: Result<Quiz, Any?>) {
+    private fun handleLoadResult(result: ResultOrFailure<Quiz>) {
         when (result) {
             is Result.Success -> {
-                originalExpiration.update { result.value.expiration }
-                state.update {
-                    it.copy(
-                        loading = false,
-                        title = TextFieldState(text = result.value.title),
-                        expiration = result.value.expiration,
-                        isPublic = result.value.isPublic,
-                        allowedUsers = result.value.allowedUsers.joinToString(", "),
-                        questions = result.value.questions.map { question ->
-                            QuestionState.fromQuestion(question)
-                        }
-                    )
-                }
-            }
-            is Result.NotFound -> state.update {
-                it.copy(
-                    loading = false,
-                    failedToLoad = true,
-                    error = ErrorStrings.NOT_FOUND.message
+                originalExpiration = result.value.expiration
+
+                quizState = QuizStateHolder(
+                    title = result.value.title,
+                    expiration = result.value.expiration,
+                    isPublic = result.value.isPublic,
+                    allowedUsers = result.value.allowedUsers.joinToString(", "),
+                    questions = result.value.questions
                 )
+
+                state = state.copy(loading = LoadingState.Success(), quizState = quizState)
             }
-            is Result.Unauthorized -> state.update {
-                it.copy(
-                    loading = false,
-                    unauthorized = true
-                )
-            }
-            is Result.Forbidden -> state.update {
-                it.copy(
-                    loading = false,
-                    failedToLoad = true,
-                    error = ErrorStrings.FORBIDDEN.message
-                )
-            }
-            else -> state.update {
-                it.copy(
-                    loading = false,
-                    failedToLoad = true,
-                    error = ErrorStrings.UNKNOWN.message
-                )
-            }
-        }
-    }
-
-    internal fun addQuestion() {
-        // Don't allow changes while initially loading or attempting to submit quiz
-        if (state.value.loading) {
-            return
-        }
-
-        // Don't allow concurrent modifications to quiz while question structure is updated
-        state.update {
-            it.copy(loading = true)
-        }
-
-        viewModelScope.launch(dispatcher) {
-            state.update {
-                it.copy(questions = it.questions + QuestionState.Empty(), loading = false)
-            }
-        }
-    }
-
-    internal fun changeQuestionType(index: Int, newType: QuestionType) {
-        if (state.value.loading) {
-            return
-        }
-
-        state.update {
-            it.copy(loading = true)
-        }
-
-        if (index < 0 || index >= state.value.questions.size) {
-            state.update {
-                it.copy(loading = false)
-            }
-            return
-        }
-
-        val newQuestion = when (newType) {
-            QuestionType.FillIn -> QuestionState.FillIn()
-            QuestionType.MultipleChoice -> QuestionState.MultipleChoice()
-            else -> throw IllegalArgumentException("Cannot change to QuestionType.Empty")
-        }
-
-        viewModelScope.launch(dispatcher) {
-            state.update { currentState ->
-                currentState.questions.toMutableList().apply {
-                    this[index] = newQuestion
-                }.let {
-                    currentState.copy(questions = it, loading = false)
-                }
-            }
-        }
-    }
-
-    internal fun changeQuestion(index: Int, newState: QuestionState) {
-        if (state.value.loading) {
-            return
-        }
-
-        state.update {
-            it.copy(loading = true)
-        }
-
-        if (index < 0 || index >= state.value.questions.size) {
-            state.update {
-                it.copy(loading = false)
-            }
-            return
-        }
-
-        viewModelScope.launch(dispatcher) {
-            state.update { currentState ->
-                currentState.questions.toMutableList().apply {
-                    this[index] = newState
-                }.let {
-                    currentState.copy(questions = it, loading = false)
-                }
-            }
-
-            // Run validation after updating with user's changes to question
-            waitGroup.add {
-                state.update {
-                    it.copy(questions = validateQuestions(it.questions))
-                }
-            }
-        }
-    }
-
-    internal fun deleteQuestion(index: Int) {
-        if (state.value.loading) {
-            return
-        }
-
-        state.update {
-            it.copy(loading = true)
-        }
-
-        val size = state.value.questions.size
-        if (size == 0 || index < 0 || index >= size) {
-            state.update {
-                it.copy(loading = false)
-            }
-            return
-        }
-
-        viewModelScope.launch(dispatcher) {
-            state.update { currentState ->
-                currentState.questions.toMutableList().apply {
-                    removeAt(index)
-                }.let {
-                    currentState.copy(questions = it, loading = false)
-                }
-            }
-
-            waitGroup.add {
-                state.update {
-                    it.copy(questionsError = validateQuestionsSize(it.questions.size))
-                }
-            }
-        }
-    }
-
-    internal fun setTitle(titleText: String) {
-        if (state.value.loading) {
-            return
-        }
-
-        // Set input value immediately
-        state.update {
-            it.copy(title = it.title.copy(text = titleText, dirty = true))
-        }
-
-        viewModelScope.launch(dispatcher) {
-            // Do validation
-            waitGroup.add {
-                state.update {
-                    it.copy(title = validateTitle(it.title.text))
-                }
-            }
-        }
-    }
-
-    internal fun setExpiration(expiration: Instant) {
-        if (state.value.loading) {
-            return
-        }
-
-        state.update {
-            it.copy(expiration = expiration)
-        }
-
-        viewModelScope.launch(dispatcher) {
-            waitGroup.add {
-                state.update {
-                    it.copy(expirationError = validateExpiration(it.expiration))
-                }
-            }
-        }
-    }
-
-    internal fun setIsPublic(isPublic: Boolean) {
-        if (state.value.loading) {
-            return
-        }
-
-        state.update {
-            it.copy(isPublic = isPublic)
-        }
-    }
-
-    internal fun setAllowedUsers(allowedUsers: String) {
-        if (state.value.loading) {
-            return
-        }
-
-        state.update {
-            it.copy(allowedUsers = allowedUsers)
-        }
-
-        viewModelScope.launch(dispatcher) {
-            waitGroup.add {
-                state.update {
-                    it.copy(allowedUsersError = validateAllowedUsers(it.allowedUsers))
-                }
+            is Result.Failure -> {
+                state = state.copy(loading = LoadingState.Error(result.reason))
             }
         }
     }
 
     /**
-     * Determines if the current [QuizState] has errors. Does not perform validation, it only
-     * checks if anything has errors.
+     * [QuizState] implementation suitable for this ViewModel and its related screens.
      */
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private suspend fun quizHasErrors(stateToCheck: QuizState): Boolean = coroutineScope {
-        if (stateToCheck.allowedUsersError != null || stateToCheck.expirationError != null
-            || stateToCheck.questionsError != null || stateToCheck.title.error != null
-        ) {
-            true
-        } else run {
-            stateToCheck.questions.map { question ->
-                async {
-                    question.error != null || question.questionTextError != null || question.correctAnswerError != null || when (question) {
-                        is QuestionState.Empty -> true
-                        is QuestionState.MultipleChoice -> question.answerErrors.any { it != null }
-                        is QuestionState.FillIn -> false // already covered by correctAnswer and questionText
+    private inner class QuizStateHolder(
+        title: String = "",
+        expiration: Instant = Instant.now().plus(1, ChronoUnit.DAYS),
+        isPublic: Boolean = true,
+        allowedUsers: String = "",
+        questions: List<Question> = emptyList(),
+    ) : QuizState {
+        override val data: Quiz
+            get() = Quiz(
+                date = Instant.now(),
+                title = title.text,
+                expiration = expiration,
+                isPublic = isPublic,
+                allowedUsers = AllowedUsersValidator.split(allowedUsers.trim()),
+                questions = questions.map {
+                    when (it) {
+                        is QuestionState.Empty -> Question.Empty
+                        is QuestionState.FillIn -> it.data
+                        is QuestionState.MultipleChoice -> it.data
                     }
                 }
-            }.let { list ->
-                // Wait for the first question that has errors
-                var first: Int = -1
-                var completed = 0
-                whileSelect {
-                    list.forEachIndexed { i, deferred ->
-                        deferred.onAwait { hasError ->
-                            if (hasError) {
-                                first = i
-                                return@onAwait false
-                            }
-                            completed++
-                            completed != list.size
-                        }
+            )
+
+        override var title: TextFieldState by mutableStateOf(TextFieldState(text = title))
+
+        override fun changeTitleText(value: String) {
+            if (state.screenIsBusy) {
+                return
+            }
+
+            title = title.copy(text = value, dirty = true)
+
+            viewModelScope.launch(dispatcher) {
+                waitGroup.add {
+                    validateTitle()
+                }
+            }
+        }
+
+        private var _expiration by mutableStateOf(expiration)
+        override var expiration: Instant
+            get() = _expiration
+            set(value) {
+                if (state.screenIsBusy) {
+                    return
+                }
+
+                _expiration = value
+
+                viewModelScope.launch(dispatcher) {
+                    waitGroup.add {
+                        quizState.validateExpiration()
                     }
                 }
-                list.forEach {
-                    it.cancel()
-                }
-                first != -1
             }
-        }
-    }
 
-    /**
-     * Runs validation on the [QuizState] portion of the current [state]. This does
-     * attempt to modify [state], even when there are no new errors.
-     *
-     * This should be called only from [submitQuiz].
-     */
-    private suspend fun validateQuiz(currentState: QuizEditorViewModelState) {
-        waitGroup.add {
-            coroutineScope {
-                val questionsError = async { validateQuestionsSize(currentState.questions.size) }
-                val validatedQuestions = async { validateQuestions(currentState.questions) }
-                val allowedUsersError = async { validateAllowedUsers(currentState.allowedUsers) }
-                val validatedTitle = validateTitle(currentState.title.text)
-                val expirationError = validateExpiration(currentState.expiration)
-                state.update {
-                    it.copy(
-                        questionsError = questionsError.await(),
-                        questions = validatedQuestions.await(),
-                        title = validatedTitle,
-                        expirationError = expirationError,
-                        allowedUsersError = allowedUsersError.await()
-                    )
+        override var expirationError: String? by mutableStateOf(null)
+
+        private var _isPublic by mutableStateOf(isPublic)
+        override var isPublic: Boolean
+            get() = _isPublic
+            set(value) {
+                if (state.screenIsBusy) {
+                    return
+                }
+
+                _isPublic = value
+            }
+
+        private var _allowedUsers by mutableStateOf(allowedUsers)
+        override var allowedUsers: String
+            get() = _allowedUsers
+            set(value) {
+                if (state.screenIsBusy) {
+                    return
+                }
+
+                _allowedUsers = value
+                viewModelScope.launch(dispatcher) {
+                    waitGroup.add {
+                        quizState.validateAllowedUsers()
+                    }
                 }
             }
-        }
-    }
 
-    private fun validateTitle(title: String) =
-        if (title.isBlank()) {
-            TextFieldState(text = title, error = "Title must not be blank.", dirty = true)
-        } else TextFieldState(text = title, dirty = true)
+        override var allowedUsersError: String? by mutableStateOf(null)
 
-    private fun validateExpiration(expiration: Instant) =
-        // Allow the original expiration if editing
-        if (!(editing && expiration == originalExpiration.value) || !editing && expiration < Instant.now()) {
-            "Expiration must be in the future."
-        } else null
-
-    private fun validateAllowedUsers(allowedUsers: String) =
-        if (!AllowedUsersValidator.validate(allowedUsers)) {
-            "Enter a comma-separated list of valid usernames."
-        } else null
-
-    private fun validateQuestionsSize(size: Int): String? = if (size == 0) {
-        "Add at least one question."
-    } else null
-
-    private suspend fun validateQuestions(questions: List<QuestionState>) = coroutineScope {
-        questions.map { async { validateQuestion(it) } }.awaitAll()
-    }
-
-    /**
-     * Validates a [QuestionState] and returns it updated with validation applied.
-     */
-    private fun validateQuestion(question: QuestionState): QuestionState {
-        val questionTextError = if (question.data.text.isBlank()) {
-            "Question prompt must not be blank."
-        } else null
-
-        return when (question) {
-            is QuestionState.Empty -> question.copy("Must select a Question type.")
-            is QuestionState.MultipleChoice -> {
-                validateMultipleChoice(question).copy(questionTextError = questionTextError)
+        private val _questions =
+            mutableStateListOf<ValidatedQuestionState>().apply {
+                questions.forEach {
+                    add(fromQuestion(it))
+                }
             }
-            is QuestionState.FillIn -> {
-                validateFillIn(question).copy(questionTextError = questionTextError)
+
+        override val questions: List<QuestionState>
+            get() = _questions.map { it.question }
+
+        override var questionsError: String? by mutableStateOf(null)
+
+        override fun addQuestion() {
+            // Don't allow changes while initially loading or attempting to submit quiz
+            if (editing || state.screenIsBusy) {
+                return
+            }
+
+            // Don't allow concurrent modifications to quiz while question structure is updated
+            _questions.add(EmptyHolder())
+        }
+
+        override fun changeQuestionType(index: Int, newType: QuestionType) {
+            if (editing || state.screenIsBusy) {
+                return
+            }
+
+            if (index !in _questions.indices) {
+                return
+            }
+
+            _questions[index] = when (newType) {
+                QuestionType.Empty -> throw IllegalArgumentException("Cannot change QuestionType to Empty")
+                QuestionType.FillIn -> FillInHolder()
+                QuestionType.MultipleChoice -> MultipleChoiceHolder()
             }
         }
-    }
 
-    private fun validateMultipleChoice(question: QuestionState.MultipleChoice): QuestionState.MultipleChoice {
-        val answersError = if (question.data.answers.size < 2) {
-            "Must add at least two answers."
-        } else null
-        val answerErrors = question.data.answers.map {
-            if (it.text.isBlank()) {
-                "Answer text must not be blank."
+        override fun deleteQuestion(index: Int) {
+            if (editing || state.screenIsBusy) {
+                return
+            }
+
+            if (_questions.isEmpty() || index !in _questions.indices) {
+                return
+            }
+
+            _questions.removeAt(index)
+
+            viewModelScope.launch(dispatcher) {
+                waitGroup.add {
+                    validateQuestionsSize()
+                }
+            }
+        }
+
+        /**
+         * Determines if the current [QuizState] has errors. Does not perform validation, it only
+         * checks if anything has errors.
+         */
+        suspend fun hasErrors(): Boolean = allowedUsersError != null || expirationError != null
+                || questionsError != null || title.error != null || _questions.anyAsync { it.hasErrors() }
+
+        /**
+         * Adds a full validation action on this [QuizState] to the ViewModel's [waitGroup].
+         */
+        suspend fun revalidate() {
+            waitGroup.add {
+                supervisorScope {
+                    launch { validateQuestionsSize() }
+                    launch { validateQuestions() }
+                    launch { validateAllowedUsers() }
+                    validateTitle()
+                    validateExpiration()
+                }
+            }
+        }
+
+        private fun validateTitle() {
+            title = title.text.let { text ->
+                if (text.isBlank()) {
+                    TextFieldState(text = text, error = "Title must not be blank.", dirty = true)
+                } else TextFieldState(text = text, error = null, dirty = true)
+            }
+        }
+
+        private fun validateExpiration() {
+            // Allow only the original expiration if editing, or any future value if creating new quiz
+            expirationError = if (
+                editing && expiration != originalExpiration ||
+                !editing && expiration.isBefore(Instant.now())
+            ) {
+                "Expiration must be in the future."
             } else null
         }
-        // intentional use of let on nullable without safe call - only want the outer `else`
-        // when the original value was null, not when the result of outer `if` is null
-        val correctAnswerError = question.data.correctAnswer.let {
-            if (it != null) {
-                if (it < 0 || it >= question.data.answers.size) {
-                    "Correct answer must be within the number of answers."
+
+        private fun validateAllowedUsers() {
+            allowedUsersError =
+                if (allowedUsers.isNotBlank() && !AllowedUsersValidator.validate(allowedUsers)) {
+                    "Enter a comma-separated list of valid usernames."
                 } else null
-            } else {
-                "Must select a correct answer."
-            }
         }
-        return question.copy(
-            error = answersError,
-            correctAnswerError = correctAnswerError,
-            answerErrors = answerErrors
-        )
-    }
 
-    private fun validateFillIn(question: QuestionState.FillIn): QuestionState.FillIn {
-        val correctAnswerError = question.data.correctAnswer.let {
-            if (it.isNullOrBlank()) {
-                "Must input a correct answer."
+        private fun validateQuestionsSize() {
+            questionsError = if (_questions.isEmpty()) {
+                "Add at least one question."
             } else null
         }
-        return question.copy(correctAnswerError = correctAnswerError)
-    }
-}
 
-internal fun QuizEditorViewModelState.copy(
-    quizId: String? = this.quizId,
-    failedToLoad: Boolean = this.failedToLoad,
-    loading: Boolean = this.loading,
-    unauthorized: Boolean = this.unauthorized,
-    error: String? = this.error,
-    title: TextFieldState = this.title,
-    expiration: Instant = this.expiration,
-    isPublic: Boolean = this.isPublic,
-    allowedUsers: String = this.allowedUsers,
-    expirationError: String? = this.expirationError,
-    allowedUsersError: String? = this.allowedUsersError,
-    questions: List<QuestionState> = this.questions,
-    questionsError: String? = this.questionsError,
-) = QuizEditorViewModelState(
-    viewModel = viewModel,
-    loading = loading,
-    quizId = quizId,
-    failedToLoad = failedToLoad,
-    unauthorized = unauthorized,
-    error = error,
-    title = title,
-    expiration = expiration,
-    isPublic = isPublic,
-    allowedUsers = allowedUsers,
-    expirationError = expirationError,
-    allowedUsersError = allowedUsersError,
-    questions = questions,
-    questionsError = questionsError,
-)
+        private suspend fun validateQuestions() {
+            supervisorScope {
+                _questions.map {
+                    async { it.revalidate() }
+                }.awaitAll()
+            }
+        }
+    }
+
+    private sealed interface ValidatedQuestionState {
+        /**
+         * The held [QuestionState] being validated.
+         */
+        val question: QuestionState
+
+        /**
+         * Runs revalidation of this [QuestionState].
+         */
+        suspend fun revalidate()
+
+        /**
+         * Returns `true` if this [QuestionState] currently has errors.
+         */
+        suspend fun hasErrors(): Boolean
+    }
+
+    private class EmptyHolder : QuestionState.Empty("Must select question type"),
+        ValidatedQuestionState {
+        override val question: QuestionState = this
+
+        private var validated by mutableStateOf(false)
+
+        override suspend fun revalidate() {
+            validated = true
+        }
+
+        override suspend fun hasErrors(): Boolean = validated
+    }
+
+    private inner class MultipleChoiceHolder(
+        questionText: String = "",
+        correctAnswer: Int? = null,
+        answers: List<Question.MultipleChoice.Answer> = emptyList(),
+    ) : QuestionState.MultipleChoice, ValidatedQuestionState {
+        override val key: String = UUID.randomUUID().toString()
+
+        override val question: QuestionState = this
+
+        override val data: Question.MultipleChoice
+            get() = Question.MultipleChoice(
+                text = prompt.text,
+                correctAnswer = correctAnswer,
+                answers = _answers.map { Question.MultipleChoice.Answer(text = it.text.text) }
+            )
+
+        override val error: String?
+            get() = answersError ?: correctAnswerError
+
+        override var prompt by mutableStateOf(TextFieldState(text = questionText))
+            private set
+
+        override var correctAnswer by mutableStateOf(correctAnswer)
+            private set
+
+        override var correctAnswerError: String? by mutableStateOf(null)
+            private set
+
+        private val _answers = mutableStateListOf<AnswerHolder>().apply {
+            answers.forEach {
+                add(AnswerHolder(it.text))
+            }
+        }
+        override val answers: List<QuestionState.MultipleChoice.Answer>
+            get() = _answers
+
+        private var answersError: String? by mutableStateOf(null)
+
+        override fun changePrompt(text: String) {
+            if (state.screenIsBusy) {
+                return
+            }
+            prompt = prompt.copy(text = text, dirty = true)
+            validatePrompt()
+        }
+
+        override fun addAnswer() {
+            if (state.screenIsBusy) {
+                return
+            }
+
+            _answers += AnswerHolder()
+        }
+
+        override fun changeCorrectAnswer(
+            index: Int,
+        ) {
+            if (state.screenIsBusy) {
+                return
+            }
+
+            if (index !in _answers.indices) {
+                return
+            }
+
+            correctAnswer = index
+        }
+
+        override fun removeAnswer(
+            index: Int,
+        ) {
+            if (state.screenIsBusy) {
+                return
+            }
+
+            _answers.removeAt(index)
+
+            val currentCorrectAnswer = correctAnswer
+            if (currentCorrectAnswer != null && index == currentCorrectAnswer) {
+                correctAnswer = max(0, currentCorrectAnswer - 1)
+            }
+        }
+
+        override suspend fun revalidate() {
+            validatePrompt()
+            validateAnswersSize()
+            validateCorrectAnswer()
+            supervisorScope {
+                _answers.map {
+                    async { it.revalidate() }
+                }.awaitAll()
+            }
+        }
+
+        override suspend fun hasErrors(): Boolean =
+            error != null || answersError != null || correctAnswerError != null ||
+                    prompt.error != null || _answers.anyAsync { it.hasErrors() }
+
+        private fun validatePrompt() {
+            prompt = if (prompt.text.isEmpty()) {
+                prompt.copy(error = "Empty question text", dirty = true)
+            } else {
+                prompt.copy(error = null)
+            }
+        }
+
+        private fun validateAnswersSize() {
+            answersError = if (answers.size < 2) {
+                "Must add at least two answers."
+            } else null
+        }
+
+        private fun validateCorrectAnswer() {
+            correctAnswerError = when (correctAnswer) {
+                null -> "Select a correct answer"
+                !in answers.indices -> "Correct answer must be within the number of answers."
+                else -> null
+            }
+        }
+
+        private inner class AnswerHolder(text: String = "") : QuestionState.MultipleChoice.Answer {
+            override var text by mutableStateOf(TextFieldState(text = text))
+
+            override fun changeText(value: String) {
+                if (state.screenIsBusy) {
+                    return
+                }
+
+                text = text.copy(text = value, dirty = true)
+                validateText()
+            }
+
+            fun revalidate() {
+                validateText()
+            }
+
+            fun hasErrors(): Boolean = text.error != null
+
+            private fun validateText() {
+                text = if (text.text.isBlank()) {
+                    text.copy(error = "Error blank", dirty = true)
+                } else {
+                    text.copy(error = null)
+                }
+            }
+        }
+    }
+
+    /**
+     * State holder for a FillIn Question.
+     */
+    private inner class FillInHolder(
+        questionText: String = "",
+        correctAnswer: String = "",
+    ) : QuestionState.FillIn, ValidatedQuestionState {
+        override val key: String = UUID.randomUUID().toString()
+
+        override val question: QuestionState = this
+
+        override val data: Question.FillIn
+            get() = Question.FillIn(
+                text = prompt.text,
+                correctAnswer = correctAnswer.text
+            )
+
+        override val error: String? = null
+
+        override var prompt by mutableStateOf(TextFieldState(text = questionText))
+            private set
+
+        override var correctAnswer by mutableStateOf(TextFieldState(text = correctAnswer))
+            private set
+
+        val correctAnswerError: String?
+            get() = correctAnswer.error
+
+        override fun changePrompt(text: String) {
+            if (state.screenIsBusy) {
+                return
+            }
+
+            prompt = prompt.copy(text = text, dirty = true)
+            validatePrompt()
+        }
+
+        override fun changeCorrectAnswer(text: String) {
+            if (state.screenIsBusy) {
+                return
+            }
+
+            correctAnswer = correctAnswer.copy(text = text, dirty = true)
+            validateCorrectAnswer()
+        }
+
+        override suspend fun revalidate() {
+            validatePrompt()
+            validateCorrectAnswer()
+        }
+
+        override suspend fun hasErrors(): Boolean =
+            error != null || prompt.error != null || correctAnswerError != null
+
+        private fun validatePrompt() {
+            prompt = if (prompt.text.isBlank()) {
+                prompt.copy(error = "Question prompt can't be empty", dirty = true)
+            } else {
+                prompt.copy(error = null)
+            }
+        }
+
+        private fun validateCorrectAnswer() {
+            correctAnswer = if (correctAnswer.text.isBlank()) {
+                correctAnswer.copy(error = "Answer text can't be empty", dirty = true)
+            } else {
+                correctAnswer.copy(error = null)
+            }
+        }
+    }
+
+    private fun fromQuestion(question: Question): ValidatedQuestionState = when (question) {
+        is Question.Empty -> EmptyHolder()
+        is Question.FillIn -> fromQuestion(question)
+        is Question.MultipleChoice -> fromQuestion(question)
+    }
+
+    private fun fromQuestion(question: Question.MultipleChoice): MultipleChoiceHolder =
+        MultipleChoiceHolder(
+            questionText = question.text,
+            correctAnswer = question.correctAnswer,
+            answers = question.answers,
+        )
+
+    private fun fromQuestion(question: Question.FillIn): FillInHolder = FillInHolder(
+        questionText = question.text,
+        correctAnswer = question.correctAnswer ?: "",
+    )
+}

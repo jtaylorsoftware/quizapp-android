@@ -1,26 +1,49 @@
 package com.github.jtaylorsoftware.quizapp.ui.signup
 
+import androidx.compose.material.ScaffoldState
+import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import com.github.jtaylorsoftware.quizapp.ui.components.AppScaffold
 
 /**
- * Wraps the [SignupScreen] and forwards the [SignupViewModel] properties and methods as
- * arguments to the [SignupScreen]. To be used as the top-level component rendered in
- * the navigation graph.
+ * Controls rendering for the sign-up screen.
+ * When the user is already signed in, this redirects the user to the profile screen.
+ *
+ * @param navigateToLogin Callback invoked when the user should be redirected to the login screen.
  */
 @Composable
-fun SignupRoute(signupViewModel: SignupViewModel) {
-//    val uiState by signupViewModel.uiState.collectAsState()
-//
-//    SignupScreen(
-//        usernameState = uiState.usernameState,
-//        onUsernameChanged = signupViewModel::setUsername,
-//        passwordState = uiState.passwordState,
-//        onPasswordChanged = signupViewModel::setPassword,
-//        emailState = uiState.emailState,
-//        onEmailChanged = signupViewModel::setEmail,
-//        navigateToLogin = {},
-//        register = { signupViewModel.register() }
-//    )
+fun SignupRoute(
+    viewModel: SignupViewModel,
+    navigateToLogin: () -> Unit,
+) {
+    SignupRoute(
+        uiState = viewModel.uiState,
+        onUsernameChanged = viewModel::setUsername,
+        onEmailChanged = viewModel::setEmail,
+        onPasswordChanged = viewModel::setPassword,
+        register = viewModel::register,
+        navigateToLogin = navigateToLogin
+    )
+}
+
+@Composable
+fun SignupRoute(
+    uiState: SignupUiState,
+    onUsernameChanged: (String) -> Unit,
+    onEmailChanged: (String) -> Unit,
+    onPasswordChanged: (String) -> Unit,
+    register: () -> Unit,
+    navigateToLogin: () -> Unit,
+    scaffoldState: ScaffoldState = rememberScaffoldState()
+) {
+    AppScaffold(scaffoldState = scaffoldState, uiState = uiState) {
+        SignupScreen(
+            uiState = uiState,
+            onUsernameChanged = onUsernameChanged,
+            onPasswordChanged = onPasswordChanged,
+            onEmailChanged = onEmailChanged,
+            navigateToLogin = navigateToLogin,
+            register = register
+        )
+    }
 }

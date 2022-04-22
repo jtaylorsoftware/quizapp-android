@@ -9,13 +9,16 @@ class FakeQuizResultNetworkSource(
 ) : QuizResultNetworkSource, FallibleNetworkSource() {
     private val cache = results.toMutableList()
 
-    override suspend fun getForQuizByUser(quiz: String, user: String): NetworkResult<QuizResultDto> =
+    override suspend fun getForQuizByUser(
+        quiz: String,
+        user: String
+    ): NetworkResult<QuizResultDto> =
         failOnNext ?: cache.firstOrNull { it.quiz == quiz && it.user == user }?.let {
             NetworkResult.success(it)
         } ?: NetworkResult.HttpError(404)
 
-    override suspend fun getAllForQuiz(quiz: String): NetworkResult<List<QuizResultDto>> =
-        failOnNext ?: NetworkResult.success(cache.filter { it.quiz == quiz })
+    override suspend fun getAllForQuiz(quiz: String): NetworkResult<QuizResultsForQuizDto> =
+        failOnNext ?: NetworkResult.success(QuizResultsForQuizDto(cache.filter { it.quiz == quiz }))
 
     override suspend fun getListingForQuizByUser(
         quiz: String,
@@ -26,10 +29,10 @@ class FakeQuizResultNetworkSource(
         }
         ?: NetworkResult.HttpError(404)
 
-    override suspend fun getAllListingForQuiz(quiz: String): NetworkResult<List<QuizResultListingDto>> =
-        failOnNext ?: NetworkResult.success(
+    override suspend fun getAllListingForQuiz(quiz: String): NetworkResult<QuizResultListingsForQuizDto> =
+        failOnNext ?: NetworkResult.success(QuizResultListingsForQuizDto(
             cache.filter { it.quiz == quiz }.map { it.asListing() }
-        )
+        ))
 
     override suspend fun createResultForQuiz(
         responses: QuizFormResponsesDto,
@@ -51,7 +54,11 @@ class FakeQuizResultNetworkSource(
                         it.choice,
                         it.choice
                     )
-                    is QuestionResponseDto.FillIn -> GradedAnswerDto.FillIn(true, it.answer, it.answer)
+                    is QuestionResponseDto.FillIn -> GradedAnswerDto.FillIn(
+                        true,
+                        it.answer,
+                        it.answer
+                    )
                 }
             }
         )

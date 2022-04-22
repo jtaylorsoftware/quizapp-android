@@ -19,17 +19,15 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import com.github.jtaylorsoftware.quizapp.R
 import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
-import com.github.jtaylorsoftware.quizapp.data.domain.models.QuestionResponse
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
 
 /**
  * Renders a form for a user to respond to a quiz. The given [responses] should be
- * of the appropriate size, and each [FormResponseState] should be the appropriate type
+ * of the
+ * appropriate size, and each [FormResponseState] should be the appropriate type
  * for its matching question of [quiz]. If either constraint is not met, [IllegalArgumentException]
  * will be thrown, potentially in the middle of rendering questions if the size constraint is met
  * but not the type constraint.
@@ -37,8 +35,6 @@ import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
  * @param quiz The quiz to respond to. Provides the question text and possible answers.
  * @param responses The pre-allocated list of responses to each question. The chosen answers
  *                  should be updated by the user's actions.
- * @param onChangeResponse Callback invoked when the user changes their answer for a response to
- *                         a single question.
  * @param onSubmit Callback invoked when the user taps the 'submit' button.
  */
 @OptIn(ExperimentalComposeUiApi::class)
@@ -46,7 +42,6 @@ import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
 fun QuizFormScreen(
     quiz: QuizForm,
     responses: List<FormResponseState>,
-    onChangeResponse: (Int, FormResponseState) -> Unit,
     onSubmit: () -> Unit,
 ) {
     require(quiz.questions.size == responses.size) {
@@ -55,18 +50,14 @@ fun QuizFormScreen(
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = onSubmit, modifier = Modifier.semantics {
-                contentDescription = "Submit responses"
+            val focusManager = LocalFocusManager.current
+            val keyboardController = LocalSoftwareKeyboardController.current
+            FloatingActionButton(onClick = {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onSubmit()
             }) {
-                val focusManager = LocalFocusManager.current
-                val keyboardController = LocalSoftwareKeyboardController.current
-                FloatingActionButton(onClick = {
-                    focusManager.clearFocus()
-                    keyboardController?.hide()
-                    onSubmit()
-                }) {
-                    Icon(painter = painterResource(R.drawable.ic_publish_24), "Upload quiz")
-                }
+                Icon(painter = painterResource(R.drawable.ic_publish_24), "Submit responses")
             }
         }
     ) {
@@ -92,7 +83,6 @@ fun QuizFormScreen(
                         index,
                         question,
                         responses[index],
-                        onChangeResponse = onChangeResponse
                     )
                 }
             }
@@ -116,43 +106,28 @@ private fun QuestionForm(
     index: Int,
     question: Question,
     responseState: FormResponseState,
-    onChangeResponse: (Int, FormResponseState) -> Unit
 ) {
     when (question) {
         is Question.Empty -> throw IllegalArgumentException("Cannot use Question.Empty in QuestionForm")
         is Question.FillIn -> {
-            require(responseState.response is QuestionResponse.FillIn) {
+            require(responseState is FormResponseState.FillIn) {
                 "Response type must be the same as Question type (FillIn)"
             }
             FillInQuestionForm(
                 index,
                 "${index + 1}. ${question.text}:",
-                responseState.response.answer,
-                responseState.error,
-                onChangeAnswer = {
-                    onChangeResponse(
-                        index,
-                        responseState.copy(response = responseState.response.copy(answer = it))
-                    )
-                }
+                responseState
             )
         }
         is Question.MultipleChoice -> {
-            require(responseState.response is QuestionResponse.MultipleChoice) {
+            require(responseState is FormResponseState.MultipleChoice) {
                 "Response type must be the same as Question type (MultipleChoice)"
             }
             MultipleChoiceQuestionForm(
                 index,
                 "${index + 1}. ${question.text}:",
                 question.answers,
-                responseState.response.choice,
-                responseState.error,
-                onChangeChoice = {
-                    onChangeResponse(
-                        index,
-                        responseState.copy(response = responseState.response.copy(choice = it))
-                    )
-                }
+                responseState
             )
         }
     }
@@ -164,17 +139,15 @@ private fun MultipleChoiceQuestionForm(
     questionIndex: Int,
     prompt: String,
     answers: List<Question.MultipleChoice.Answer>,
-    choice: Int,
-    error: String?,
-    onChangeChoice: (Int) -> Unit
+    responseState: FormResponseState.MultipleChoice
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     Column(Modifier.selectableGroup()) {
         Text(prompt)
         Text("Tap an answer to mark it as your choice")
-        error?.let {
-            Text(error, color = MaterialTheme.colors.error)
+        responseState.error?.let {
+            Text(it, color = MaterialTheme.colors.error)
         }
         answers.forEachIndexed { index, answer ->
             // Row that looks like: (Radio) 1. answer text
@@ -182,16 +155,16 @@ private fun MultipleChoiceQuestionForm(
                 Modifier
                     .testTag("Select answer ${index + 1} for question ${questionIndex + 1}")
                     .selectable(
-                        selected = choice == index,
+                        selected = responseState.choice == index,
                         onClick = {
                             focusManager.clearFocus()
                             keyboardController?.hide()
-                            onChangeChoice(index)
+                            responseState.choice = index
                         }
                     )
             ) {
                 RadioButton(
-                    selected = choice == index,
+                    selected = responseState.choice == index,
                     onClick = null
                 )
                 Text("${index + 1}. ${answer.text}")
@@ -205,24 +178,22 @@ private fun MultipleChoiceQuestionForm(
 private fun FillInQuestionForm(
     questionIndex: Int,
     prompt: String,
-    answer: String,
-    error: String?,
-    onChangeAnswer: (String) -> Unit
+    responseState: FormResponseState.FillIn,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     Column {
         Text(prompt)
-        error?.let {
-            Text(error, color = MaterialTheme.colors.error)
+        responseState.error?.let {
+            Text(it, color = MaterialTheme.colors.error)
         }
         TextField(
-            value = answer,
-            onValueChange = onChangeAnswer,
+            value = responseState.answer.text,
+            onValueChange = { responseState.changeAnswer(it) },
             label = {
                 Text("Answer")
             },
             modifier = Modifier.testTag("Fill in answer for question ${questionIndex + 1}"),
-            isError = error != null,
+            isError = responseState.error != null,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
         )

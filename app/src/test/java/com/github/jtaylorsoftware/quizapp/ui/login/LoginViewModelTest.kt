@@ -1,5 +1,7 @@
 package com.github.jtaylorsoftware.quizapp.ui.login
 
+import com.github.jtaylorsoftware.quizapp.auth.AuthenticationState
+import com.github.jtaylorsoftware.quizapp.auth.FakeAuthStateManager
 import com.github.jtaylorsoftware.quizapp.data.domain.FakeUserAuthService
 import com.github.jtaylorsoftware.quizapp.data.domain.Result
 import com.github.jtaylorsoftware.quizapp.data.domain.UserAuthService
@@ -27,14 +29,16 @@ class LoginViewModelTest {
     private lateinit var networkSource: FakeUserNetworkSource
     private lateinit var service: UserAuthService
     private lateinit var viewModel: LoginViewModel
-
+    private lateinit var authStateManager: FakeAuthStateManager
+    
     @Before
     fun beforeEach() {
         Dispatchers.setMain(StandardTestDispatcher())
         userCache = FakeUserCache()
         networkSource = FakeUserNetworkSource()
         service = FakeUserAuthService(userCache, networkSource)
-        viewModel = LoginViewModel(service, Dispatchers.Main)
+        authStateManager = FakeAuthStateManager()
+        viewModel = LoginViewModel(service, authStateManager, Dispatchers.Main)
     }
 
     @After
@@ -48,7 +52,7 @@ class LoginViewModelTest {
         viewModel.setUsername(username)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).usernameState.text,
+            viewModel.uiState.usernameState.text,
             `is`(username)
         )
     }
@@ -60,7 +64,7 @@ class LoginViewModelTest {
         viewModel.setUsername(username)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).usernameState.error,
+            viewModel.uiState.usernameState.error,
             `is`(notNullValue())
         )
 
@@ -69,7 +73,7 @@ class LoginViewModelTest {
         viewModel.setUsername(username)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).usernameState.error,
+            viewModel.uiState.usernameState.error,
             `is`(notNullValue())
         )
 
@@ -78,7 +82,7 @@ class LoginViewModelTest {
         viewModel.setUsername(username)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).usernameState.error,
+            viewModel.uiState.usernameState.error,
             `is`(notNullValue())
         )
     }
@@ -90,7 +94,7 @@ class LoginViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).passwordState.text,
+            viewModel.uiState.passwordState.text,
             `is`(password)
         )
     }
@@ -102,7 +106,7 @@ class LoginViewModelTest {
         viewModel.setPassword(password)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).passwordState.error,
+            viewModel.uiState.passwordState.error,
             `is`(notNullValue())
         )
 
@@ -111,7 +115,7 @@ class LoginViewModelTest {
         viewModel.setPassword(password)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).passwordState.error,
+            viewModel.uiState.passwordState.error,
             `is`(notNullValue())
         )
     }
@@ -122,9 +126,12 @@ class LoginViewModelTest {
         viewModel.setUsername("!@#dsfsdf")
         viewModel.login()
         advanceUntilIdle()
-        assertThat(viewModel.uiState.value.loading, IsInstanceOf(LoadingState.AwaitingAction::class.java))
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).usernameState.error,
+            viewModel.uiState.loginStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
+        )
+        assertThat(
+            viewModel.uiState.usernameState.error,
             `is`(notNullValue())
         )
 
@@ -133,9 +140,12 @@ class LoginViewModelTest {
         viewModel.setPassword("a".repeat(21))
         viewModel.login()
         advanceUntilIdle()
-        assertThat(viewModel.uiState.value.loading, IsInstanceOf(LoadingState.AwaitingAction::class.java))
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).passwordState.error,
+            viewModel.uiState.loginStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
+        )
+        assertThat(
+            viewModel.uiState.passwordState.error,
             `is`(notNullValue())
         )
 
@@ -145,13 +155,16 @@ class LoginViewModelTest {
         viewModel.setPassword("a".repeat(21))
         viewModel.login()
         advanceUntilIdle()
-        assertThat(viewModel.uiState.value.loading, IsInstanceOf(LoadingState.AwaitingAction::class.java))
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).usernameState.error,
+            viewModel.uiState.loginStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
+        )
+        assertThat(
+            viewModel.uiState.usernameState.error,
             `is`(notNullValue())
         )
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).passwordState.error,
+            viewModel.uiState.passwordState.error,
             `is`(notNullValue())
         )
     }
@@ -163,15 +176,15 @@ class LoginViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            viewModel.uiState.value.loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            viewModel.uiState.loginStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
         )
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).usernameState.error,
+            viewModel.uiState.usernameState.error,
             `is`(notNullValue())
         )
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).passwordState.error,
+            viewModel.uiState.passwordState.error,
             `is`(notNullValue())
         )
     }
@@ -184,7 +197,7 @@ class LoginViewModelTest {
             Result.success()
         }
 
-        viewModel = LoginViewModel(mockService, Dispatchers.Main)
+        viewModel = LoginViewModel(mockService, authStateManager, Dispatchers.Main)
 
         viewModel.setUsername("username")
         viewModel.setPassword("password")
@@ -192,20 +205,19 @@ class LoginViewModelTest {
         viewModel.login()
 
         runCurrent()
-        assertThat(viewModel.uiState.value.loading, IsInstanceOf(LoadingState.InProgress::class.java))
+        assertThat(
+            viewModel.uiState.loginStatus,
+            IsInstanceOf(LoadingState.InProgress::class.java)
+        )
     }
 
     @Test
-    fun `login sets uiState login and clears loading after successful login`() = runTest {
+    fun `login notifies AuthStateManager after successful login`() = runTest {
         viewModel.setUsername("username")
         viewModel.setPassword("password")
         viewModel.login()
         advanceUntilIdle()
-        assertThat(
-            viewModel.uiState.value.loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
-        )
-        assertThat(viewModel.uiState.value, IsInstanceOf(LoginUiState.SignedIn::class.java))
+        assertThat(authStateManager.state, IsInstanceOf(AuthenticationState.Authenticated::class.java))
     }
 
     @Test
@@ -216,15 +228,15 @@ class LoginViewModelTest {
         viewModel.login()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value.loading,
+            viewModel.uiState.loginStatus,
             IsInstanceOf(LoadingState.Error::class.java)
         )
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).usernameState.error,
+            viewModel.uiState.usernameState.error,
             `is`(notNullValue())
         )
         assertThat(
-            (viewModel.uiState.value as LoginUiState.Form).passwordState.error,
+            viewModel.uiState.passwordState.error,
             `is`(notNullValue())
         )
     }
@@ -237,7 +249,7 @@ class LoginViewModelTest {
         viewModel.login()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value.loading,
+            viewModel.uiState.loginStatus,
             IsInstanceOf(LoadingState.Error::class.java)
         )
     }
@@ -250,7 +262,7 @@ class LoginViewModelTest {
         viewModel.login()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value.loading,
+            viewModel.uiState.loginStatus,
             IsInstanceOf(LoadingState.Error::class.java)
         )
     }

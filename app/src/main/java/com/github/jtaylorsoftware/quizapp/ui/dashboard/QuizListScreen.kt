@@ -1,28 +1,25 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.Icon
-import androidx.compose.material.IconButton
-import androidx.compose.material.Text
+import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import com.github.jtaylorsoftware.quizapp.R
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizListing
-
 import com.github.jtaylorsoftware.quizapp.util.describeMax
 import com.github.jtaylorsoftware.quizapp.util.isInPast
 import com.github.jtaylorsoftware.quizapp.util.periodBetweenNow
@@ -31,27 +28,28 @@ import java.time.Instant
 /**
  * Displays the signed-in user's list of created quizzes, in [QuizListing] format.
  *
- * @param quizzes The user's QuizListings.
  * @param onDeleteQuiz Callback invoked when the user presses "Delete" on a QuizListing. It should
- *                     accept the `id` of the Quiz to be deleted.
+ * accept the `id` of the Quiz to be deleted.
+ *
  * @param navigateToEditor Callback invoked when the user presses "Edit" on a QuizListing. It should
- *                         accept the `id` of the Quiz to be edited.
+ * accept the `id` of the Quiz to be edited.
+ *
  * @param navigateToResults Callback invoked when the user presses "View Results" on a QuizListing. It should
- *                          accept the `id` of the Quiz to view the results of.
+ * accept the `id` of the Quiz to view the results of.
  */
 @Composable
 fun QuizListScreen(
-    quizzes: List<QuizListing>,
+    uiState: QuizListUiState.QuizList,
     onDeleteQuiz: (ObjectId) -> Unit,
-    navigateToEditor: (ObjectId) -> Unit,
-    navigateToResults: (ObjectId) -> Unit
+    navigateToEditor: (ObjectId?) -> Unit,
+    navigateToResults: (ObjectId) -> Unit,
 ) {
-    LazyColumn {
+    LazyColumn(Modifier.fillMaxWidth()) {
         item {
             Text("Your Quizzes")
         }
 
-        items(quizzes, key = { it.id.value }) { quiz ->
+        items(uiState.data, key = { it.id.value }) { quiz ->
             QuizListItem(quiz, onDeleteQuiz, navigateToEditor, navigateToResults)
         }
     }
@@ -66,40 +64,49 @@ fun QuizListScreen(
  * @param navigateToEditor Callback invoked when the user presses the "Edit" button.
  * @param navigateToResults Callback invoked when the user presses the "View Results" button.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun QuizListItem(
     quiz: QuizListing,
     onDeleteQuiz: (ObjectId) -> Unit,
-    navigateToEditor: (ObjectId) -> Unit,
+    navigateToEditor: (ObjectId?) -> Unit,
     navigateToResults: (ObjectId) -> Unit
 ) {
     val questionNoun = rememberCapitalizedNoun(quiz.questionCount, "question", "questions")
     val responseNoun = rememberCapitalizedNoun(quiz.resultsCount, "response", "responses")
+    val clipboardManager = LocalClipboardManager.current
 
     Box {
         Column {
             // Title     [Delete] [Edit] [Results]
             Row {
                 Text("\"${quiz.title}\"")
-                IconButton(onClick = { onDeleteQuiz(quiz.id) }, modifier = Modifier.semantics {
-                    contentDescription = "Delete Quiz"
-                }) {
-                    Icon(Icons.Default.Delete, null)
+                IconButton(onClick = { onDeleteQuiz(quiz.id) }) {
+                    Icon(Icons.Default.Delete, "Delete Quiz", tint = MaterialTheme.colors.error)
                 }
-                IconButton(onClick = { navigateToEditor(quiz.id) }, modifier = Modifier.semantics {
-                    contentDescription = "Edit Quiz"
-                }) {
-                    Icon(Icons.Default.Edit, null)
+                IconButton(onClick = { navigateToEditor(quiz.id) }) {
+                    Icon(Icons.Default.Edit, "Edit Quiz", tint = MaterialTheme.colors.secondary)
                 }
-                IconButton(onClick = { navigateToResults(quiz.id) }, modifier = Modifier.semantics {
-                    contentDescription = "View Results"
-                }) {
-                    Icon(painter = painterResource(R.drawable.ic_assessment_24), null)
+                IconButton(onClick = { navigateToResults(quiz.id) }) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_assessment_24),
+                        "View Results",
+                        tint = MaterialTheme.colors.secondaryVariant
+                    )
                 }
             }
             Text("${quiz.questionCount} $questionNoun")
             Text("${quiz.resultsCount} $responseNoun")
-            Text("Link: /quizzes/${quiz.id}")
+            Text("Link: ")
+            Text(
+                "quizzes/${quiz.id.value}",
+                modifier = Modifier.combinedClickable(
+                    onClick = { navigateToResults(quiz.id) },
+                    onLongClick = {
+                        clipboardManager.setText(AnnotatedString("http://makequizzes.online/quizzes/${quiz.id.value}"))
+                    }),
+                color = MaterialTheme.colors.secondary
+            )
             Row {
                 CreationTimestamp(quiz.date)
                 Expiration(quiz.expiration)
@@ -122,7 +129,11 @@ private fun CreationTimestamp(date: Instant) {
         }
     }
 
-    Text("Created $timestamp")
+    CompositionLocalProvider(
+        LocalContentAlpha provides ContentAlpha.medium
+    ) {
+        Text("Created $timestamp")
+    }
 }
 
 /**
@@ -134,7 +145,7 @@ private fun CreationTimestamp(date: Instant) {
 private fun Expiration(expiration: Instant) {
     val expired: Boolean by remember { derivedStateOf { expiration.isInPast() } }
     if (expired) {
-        Text("Expired")
+        Text("Expired", color = MaterialTheme.colors.error)
     }
 }
 

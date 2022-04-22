@@ -1,8 +1,13 @@
 package com.github.jtaylorsoftware.quizapp.di
 
+import com.github.jtaylorsoftware.quizapp.auth.AuthenticationEventProducer
+import com.github.jtaylorsoftware.quizapp.auth.JwtInterceptor
 import com.github.jtaylorsoftware.quizapp.data.QuestionType
 import com.github.jtaylorsoftware.quizapp.data.local.UserCache
-import com.github.jtaylorsoftware.quizapp.data.network.*
+import com.github.jtaylorsoftware.quizapp.data.network.NetworkResultAdapterFactory
+import com.github.jtaylorsoftware.quizapp.data.network.QuizResultService
+import com.github.jtaylorsoftware.quizapp.data.network.QuizService
+import com.github.jtaylorsoftware.quizapp.data.network.UserService
 import com.github.jtaylorsoftware.quizapp.data.network.dto.GradedAnswerDto
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuestionDto
 import com.github.jtaylorsoftware.quizapp.data.network.dto.QuestionResponseDto
@@ -24,10 +29,11 @@ object RetrofitModule {
     @Singleton
     fun provideRetrofit(
         userCache: UserCache,
+        authenticationEventProducer: AuthenticationEventProducer,
         moshi: Moshi,
     ): Retrofit = Retrofit.Builder()
-        .client(createHttpClient(userCache))
-        .baseUrl("http://makequizzes.online/api/v2/")
+        .client(createHttpClient(userCache, authenticationEventProducer))
+        .baseUrl("http://www.makequizzes.online/api/v2/")
         .addCallAdapterFactory(NetworkResultAdapterFactory())
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
@@ -77,8 +83,17 @@ object RetrofitModule {
         .build()
 
     private fun createHttpClient(
-        userCache: UserCache
+        userCache: UserCache,
+        authenticationEventProducer: AuthenticationEventProducer
     ): OkHttpClient = OkHttpClient.Builder()
-        .addInterceptor(JwtInterceptor(userCache::loadToken))
+        .addInterceptor(
+            JwtInterceptor(
+                getToken = userCache::loadToken,
+                onUnauthorized = {
+                    userCache.clearToken()
+                    authenticationEventProducer.onRequireLogIn()
+                }
+            )
+        )
         .build()
 }

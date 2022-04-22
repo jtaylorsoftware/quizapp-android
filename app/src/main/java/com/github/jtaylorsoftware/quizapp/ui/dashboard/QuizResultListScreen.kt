@@ -4,6 +4,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -19,20 +20,49 @@ import com.github.jtaylorsoftware.quizapp.data.domain.models.*
 /**
  * Displays the signed-in user's list of results for their created quizzes, in [QuizResultListing] format.
  *
- * @param results The list of the user's result listings.
- * @param navigateToDetails Callback invoked when the user presses "Details" on a listing.
- *                          It accepts the id of the selected listing.
+ * @param navigateToDetails Callback invoked when the user presses on a listing.
+ * It accepts the id of the quiz and id of the user for the selected listing.
  */
 @Composable
-fun QuizResultListScreen(results: List<QuizResultListing>, navigateToDetails: (ObjectId) -> Unit) {
-    LazyColumn {
+fun QuizResultListScreen(
+    uiState: QuizResultListUiState.ListForUser,
+    navigateToDetails: (ObjectId, ObjectId) -> Unit
+) {
+    LazyColumn(Modifier.fillMaxWidth()) {
         item {
             Text("Your Quiz Results")
             Text("Tap a Result to view graded questions")
         }
 
-        items(results, key = { it.id.value }) { result ->
-            ResultListItem(result, navigateToDetails = { navigateToDetails(result.id) })
+        items(uiState.data, key = { it.id.value }) { result ->
+            ResultListItemForCurrentUser(
+                result,
+                navigateToDetails = { navigateToDetails(result.quiz, result.user) })
+        }
+    }
+}
+
+/**
+ * Displays the list of results for a quiz, in [QuizResultListing] format.
+ *
+ * @param navigateToDetails Callback invoked when the user presses on a listing.
+ * It accepts the id of the quiz and id of the user for the selected listing.
+ */
+@Composable
+fun QuizResultListScreen(
+    uiState: QuizResultListUiState.ListForQuiz,
+    navigateToDetails: (ObjectId, ObjectId) -> Unit
+) {
+    LazyColumn(Modifier.fillMaxWidth()) {
+        item {
+            Text("Results for quiz \"${uiState.quizTitle}\":")
+            Text("Tap a Result to view graded questions")
+        }
+
+        items(uiState.data, key = { it.id.value }) { result ->
+            ResultListItemForQuiz(
+                result,
+                navigateToDetails = { navigateToDetails(result.quiz, result.user) })
         }
     }
 }
@@ -45,11 +75,28 @@ fun QuizResultListScreen(results: List<QuizResultListing>, navigateToDetails: (O
  * @param navigateToDetails Callback invoked to navigate to the details of [result].
  */
 @Composable
-private fun ResultListItem(result: QuizResultListing, navigateToDetails: () -> Unit) {
+private fun ResultListItemForCurrentUser(result: QuizResultListing, navigateToDetails: () -> Unit) {
     Box(modifier = Modifier.clickable { navigateToDetails() }) {
         Column {
             Text("\"${result.quizTitle}\"")
             Text("by ${result.createdBy}")
+            Text("Score: ${"%.2f".format(result.score * 100)}%")
+        }
+    }
+}
+
+/**
+ * Displays the data for one [QuizResultListing] by a user other than the signed-in user (because
+ * the Quiz that the QuizResult belongs to is one created by the signed-in user).
+ *
+ * @param result The listing to display.
+ * @param navigateToDetails Callback invoked to navigate to the details of [result].
+ */
+@Composable
+private fun ResultListItemForQuiz(result: QuizResultListing, navigateToDetails: () -> Unit) {
+    Box(modifier = Modifier.clickable { navigateToDetails() }) {
+        Column {
+            Text("Results for ${result.username}:")
             Text("Score: ${"%.2f".format(result.score * 100)}%")
         }
     }

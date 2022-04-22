@@ -1,9 +1,6 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
-import com.github.jtaylorsoftware.quizapp.data.domain.FakeQuizRepository
-import com.github.jtaylorsoftware.quizapp.data.domain.FakeUserRepository
-import com.github.jtaylorsoftware.quizapp.data.domain.QuizRepository
-import com.github.jtaylorsoftware.quizapp.data.domain.UserRepository
+import com.github.jtaylorsoftware.quizapp.data.domain.*
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizListing
 import com.github.jtaylorsoftware.quizapp.data.local.FakeQuizListingDatabaseSource
@@ -19,9 +16,10 @@ import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.*
 import org.hamcrest.MatcherAssert.assertThat
-import org.hamcrest.Matchers.*
+import org.hamcrest.Matchers.containsInAnyOrder
 import org.hamcrest.core.IsInstanceOf
 import org.junit.After
 import org.junit.Before
@@ -75,59 +73,62 @@ class QuizListViewModelTest {
     }
 
     @Test
-    fun `ViewModel should load quizzes immediately`() = runTest {
+    fun `should begin with LoadingState NotStarted and NoProfile`() = runTest {
         // Should first be Loading, before initial refresh
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizListUiState.NoQuizzes::class.java)
         )
 
-        advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value,
-            IsInstanceOf(QuizListUiState.QuizList::class.java)
-        )
-
-        assertThat(
-            (viewModel.uiState.value as QuizListUiState.QuizList).data,
-            containsInAnyOrder(*quizListingDtos.map { QuizListing.fromDto(it) }.toTypedArray())
+            viewModel.uiState.loading,
+            IsInstanceOf(LoadingState.NotStarted::class.java)
         )
     }
 
     @Test
-    fun `refresh should set uiState to RequireSignIn when getting quizzes results in Http Unauthorized`() =
-        runTest {
-            // local cache has no value, so force error in network to cause Unauthorized
-            networkSource.failOnNextWith(NetworkResult.HttpError(401))
+    fun `refresh should set loading to InProgress and then load data`() = runTest {
+        val mockUserRepository = spyk(userRepository)
+        viewModel = QuizListViewModel(mockUserRepository, quizRepository)
 
-            viewModel.refresh()
-            advanceUntilIdle()
-
-            assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizListUiState.RequireSignIn::class.java)
-            )
+        every { mockUserRepository.getQuizzes() } returns flow {
+            delay(1000)
+            emit(Result.success(listOf(QuizListing.fromDto(quizListingDtos[0]))))
         }
+
+        viewModel.refresh()
+        advanceTimeBy(100)
+        assertThat(
+            viewModel.uiState.loading,
+            IsInstanceOf(LoadingState.InProgress::class.java)
+        )
+
+        advanceUntilIdle()
+        assertThat(
+            viewModel.uiState,
+            IsInstanceOf(QuizListUiState.QuizList::class.java)
+        )
+    }
 
     @Test
     fun `refresh should do nothing if already refreshing data`() = runTest {
         val mockRepository = spyk(userRepository)
         coEvery { mockRepository.getQuizzes() } coAnswers {
+            delay(1000)
             userRepository.getQuizzes()
         }
 
         viewModel = QuizListViewModel(mockRepository, quizRepository)
-        // Finish initial load - call #1
-        advanceUntilIdle()
 
-        // Do first refresh - call #2, sets loading = true
         viewModel.refresh()
-        // Immediately try another - would be call #3
+        // Enter refresh
+        advanceTimeBy(100)
+
+        // Try to call while still refreshing
         viewModel.refresh()
-        advanceUntilIdle()
 
         // Should be 2 calls
-        coVerify(exactly = 2) {
+        coVerify(exactly = 1) {
             mockRepository.getQuizzes()
         }
         confirmVerified(mockRepository)
@@ -152,7 +153,7 @@ class QuizListViewModelTest {
 
         // Should be empty first
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(QuizListUiState.NoQuizzes::class.java)
         )
 
@@ -165,13 +166,13 @@ class QuizListViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            (viewModel.uiState.value as QuizListUiState.QuizList).data,
+            (viewModel.uiState as QuizListUiState.QuizList).data,
             containsInAnyOrder(*quizListingDtos.map { QuizListing.fromDto(it) }.toTypedArray())
         )
     }
 
     @Test
-    fun `deleteQuiz should set loading flag before deletion`() = runTest {
+    fun `deleteQuiz should set deleteQuizStatus to InProgress before deletion`() = runTest {
         quizNetworkSource = spyk(quizNetworkSource)
         quizRepository = FakeQuizRepository(quizListingDbSource, quizNetworkSource)
 
@@ -182,6 +183,7 @@ class QuizListViewModelTest {
 
         // Finish initial load
         viewModel = QuizListViewModel(userRepository, quizRepository)
+        viewModel.refresh()
         advanceUntilIdle()
 
         // Do delete
@@ -189,38 +191,40 @@ class QuizListViewModelTest {
         advanceTimeBy(100)
 
         assertThat(
-            (viewModel.uiState.value as QuizListUiState.QuizList).loading,
+            (viewModel.uiState as QuizListUiState.QuizList).deleteQuizStatus,
             IsInstanceOf(LoadingState.InProgress::class.java)
         )
     }
 
     @Test
-    fun `deleteQuiz should delete one quiz and clear loading on success`() = runTest {
-        quizNetworkSource = spyk(quizNetworkSource)
-        quizRepository = FakeQuizRepository(quizListingDbSource, quizNetworkSource)
+    fun `deleteQuiz when successful should delete one quiz and clear loading on success`() =
+        runTest {
+            quizNetworkSource = spyk(quizNetworkSource)
+            quizRepository = FakeQuizRepository(quizListingDbSource, quizNetworkSource)
 
-        coEvery { quizNetworkSource.delete(any()) } coAnswers {
-            delay(1000)
-            callOriginal()
+            coEvery { quizNetworkSource.delete(any()) } coAnswers {
+                delay(1000)
+                callOriginal()
+            }
+
+            // Finish initial load
+            viewModel = QuizListViewModel(userRepository, quizRepository)
+            viewModel.refresh()
+            advanceUntilIdle()
+
+            // Do delete
+            viewModel.deleteQuiz(ObjectId(quizListingDtos[0].id))
+            advanceUntilIdle()
+            coVerify(exactly = 1) {
+                quizNetworkSource.delete(quizListingDtos[0].id)
+            }
+            confirmVerified(quizNetworkSource)
+
+            assertThat(
+                (viewModel.uiState as QuizListUiState.QuizList).deleteQuizStatus,
+                IsInstanceOf(LoadingState.Success::class.java)
+            )
         }
-
-        // Finish initial load
-        viewModel = QuizListViewModel(userRepository, quizRepository)
-        advanceUntilIdle()
-
-        // Do delete
-        viewModel.deleteQuiz(ObjectId(quizListingDtos[0].id))
-        advanceUntilIdle()
-        coVerify(exactly = 1) {
-            quizNetworkSource.delete(quizListingDtos[0].id)
-        }
-        confirmVerified(quizNetworkSource)
-
-        assertThat(
-            (viewModel.uiState.value as QuizListUiState.QuizList).loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
-        )
-    }
 
     @Test
     fun `deleteQuiz does nothing when quizzes are null or empty`() = runTest {
@@ -235,6 +239,9 @@ class QuizListViewModelTest {
             quizListingDbSource,
             quizResultListingDbSource
         )
+        quizNetworkSource = spyk(FakeQuizNetworkSource(quizDtos))
+        coEvery { quizNetworkSource.delete(any()) } returns NetworkResult.success()
+        quizRepository = FakeQuizRepository(quizListingDbSource, quizNetworkSource)
         viewModel = QuizListViewModel(userRepository, quizRepository)
 
         // Finish first load - no listings in network so should be emptyList
@@ -244,68 +251,67 @@ class QuizListViewModelTest {
         viewModel.deleteQuiz(ObjectId(quizListingDtos[0].id))
         runCurrent()
 
-        // Shouldn't set loading
-        assertThat(
-            (viewModel.uiState.value as QuizListUiState.NoQuizzes).loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
-        )
+        // Shouldn't do deletion
+        coVerify(exactly = 0) {
+            quizNetworkSource.delete(any())
+        }
+        confirmVerified(quizNetworkSource)
     }
 
     @Test
     fun `deleteQuiz does nothing when loading is true`() = runTest {
-        // Finish first load
-        advanceUntilIdle()
+        val mockRepository = spyk(userRepository)
+        coEvery { mockRepository.getQuizzes() } coAnswers {
+            delay(1000)
+            userRepository.getQuizzes()
+        }
 
+        viewModel = QuizListViewModel(mockRepository, quizRepository)
         // Do refresh to set loading
         viewModel.refresh()
-
+        advanceTimeBy(100)
         // Try delete
         viewModel.deleteQuiz(ObjectId(quizListingDtos[0].id))
-        runCurrent()
+        advanceUntilIdle()
 
         // Shouldn't set loading
         assertThat(
-            (viewModel.uiState.value as QuizListUiState.QuizList).loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            (viewModel.uiState as QuizListUiState.QuizList).deleteQuizStatus,
+            IsInstanceOf(LoadingState.NotStarted::class.java)
         )
     }
 
     @Test
-    fun `deleteQuiz should set uiState to RequireSignIn when delete fails with Unauthorized`() =
+    fun `deleteQuiz should set deleteQuizStatus to Error when delete fails with Unauthorized`() =
         runTest {
-            networkSource.failOnNextWith(NetworkResult.HttpError(401))
+            viewModel.refresh()
+            advanceUntilIdle()
+
+            quizNetworkSource.failOnNextWith(NetworkResult.HttpError(401))
             viewModel.deleteQuiz(ObjectId("123"))
             advanceUntilIdle()
             assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(QuizListUiState.RequireSignIn::class.java)
+                (viewModel.uiState as QuizListUiState.QuizList).deleteQuizStatus,
+                IsInstanceOf(LoadingState.Error::class.java)
             )
         }
 
     @Test
-    fun `UiState is RequireSignIn if ViewModelState has unauthorized flag set`() = runTest {
-        val state = QuizListViewModelState(unauthorized = true)
-        val uiState = QuizListUiState.fromViewModelState(state)
-        assertThat(uiState, IsInstanceOf(QuizListUiState.RequireSignIn::class.java))
-    }
-
-    @Test
-    fun `UiState is NoQuizzes if ViewModelState isLoading and screen data is null`() = runTest {
-        val state = QuizListViewModelState(
-            loading = true,
-            unauthorized = false,
-            data = null,
-        )
-        val uiState = QuizListUiState.fromViewModelState(state)
-        assertThat(uiState, IsInstanceOf(QuizListUiState.NoQuizzes::class.java))
-    }
-
-    @Test
-    fun `UiState is NoQuizzes if ViewModelState not isLoading or unauthorized and screen data is null`() =
+    fun `UiState is NoQuizzes if ViewModelState loading InProgress and screen data is null`() =
         runTest {
             val state = QuizListViewModelState(
-                loading = false,
-                unauthorized = false,
+                loading = LoadingState.InProgress,
+                data = null,
+            )
+            val uiState = QuizListUiState.fromViewModelState(state)
+            assertThat(uiState, IsInstanceOf(QuizListUiState.NoQuizzes::class.java))
+        }
+
+    @Test
+    fun `UiState is NoQuizzes if ViewModelState loading not InProgress and screen data is null`() =
+        runTest {
+            val state = QuizListViewModelState(
+                loading = LoadingState.NotStarted,
                 data = null,
             )
             val uiState = QuizListUiState.fromViewModelState(state)
@@ -316,11 +322,10 @@ class QuizListViewModelTest {
         }
 
     @Test
-    fun `UiState is NoQuizzes if ViewModelState not isLoading or unauthorized and screen data is emptyList`() =
+    fun `UiState is NoQuizzes if ViewModelState loading not InProgress and screen data is emptyList`() =
         runTest {
             val state = QuizListViewModelState(
-                loading = false,
-                unauthorized = false,
+                loading = LoadingState.Success(),
                 data = emptyList(),
             )
             val uiState = QuizListUiState.fromViewModelState(state)
@@ -331,11 +336,10 @@ class QuizListViewModelTest {
         }
 
     @Test
-    fun `UiState is QuizList if ViewModelState not loading or unauthorized data is not null`() =
+    fun `UiState is QuizList if ViewModelState not loading data is not null`() =
         runTest {
             val state = QuizListViewModelState(
-                loading = false,
-                unauthorized = false,
+                loading = LoadingState.Success(),
                 data = listOf(QuizListing()),
             )
             val uiState = QuizListUiState.fromViewModelState(state)

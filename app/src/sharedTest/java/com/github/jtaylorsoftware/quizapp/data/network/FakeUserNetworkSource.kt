@@ -113,18 +113,18 @@ class FakeUserNetworkSource(
             NetworkResult.success(results)
         }
 
-    override suspend fun changeEmail(email: String): NetworkResult<Unit> = failOnNext ?: run {
+    override suspend fun changeEmail(email: ChangeEmailRequest): NetworkResult<Unit> = failOnNext ?: run {
         cache.forEach {
-            if (it.user.email == email) {
+            if (it.user.email == email.email) {
                 return@run NetworkResult.HttpError(
                     409,
-                    listOf(ApiError(field = "email", message = "Taken", value = email))
+                    listOf(ApiError(field = "email", message = "Taken", value = email.email))
                 )
             }
         }
         NetworkResult.success()
     }
 
-    override suspend fun changePassword(password: String): NetworkResult<Unit> =
+    override suspend fun changePassword(password: ChangePasswordRequest): NetworkResult<Unit> =
         failOnNext ?: NetworkResult.success()
 }

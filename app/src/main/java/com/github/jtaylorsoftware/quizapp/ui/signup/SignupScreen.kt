@@ -3,14 +3,17 @@ package com.github.jtaylorsoftware.quizapp.ui.signup
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.material.Button
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import com.github.jtaylorsoftware.quizapp.ui.components.EmailField
-import com.github.jtaylorsoftware.quizapp.ui.components.PasswordField
-import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
-import com.github.jtaylorsoftware.quizapp.ui.components.UsernameField
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import com.github.jtaylorsoftware.quizapp.ui.components.*
+import com.github.jtaylorsoftware.quizapp.ui.isInProgress
 
 /**
  * Presents a screen for the user to input their credentials for a new account.
@@ -24,27 +27,28 @@ import com.github.jtaylorsoftware.quizapp.ui.components.UsernameField
  */
 @Composable
 fun SignupScreen(
-    usernameState: TextFieldState,
+    uiState: SignupUiState,
     onUsernameChanged: (String) -> Unit,
-    passwordState: TextFieldState,
     onPasswordChanged: (String) -> Unit,
-    emailState: TextFieldState,
     onEmailChanged: (String) -> Unit,
     register: () -> Unit,
     navigateToLogin: () -> Unit,
 ) {
+    val isInProgress = remember(uiState) { uiState.registerStatus.isInProgress }
+    val signUpButtonTextAlpha by derivedStateOf { if (isInProgress) 0.0f else 1.0f }
+
     var confirmPasswordState by remember { mutableStateOf(TextFieldState()) }
     val onConfirmPasswordChanged = { confirmPassword: String ->
-        val error = if (confirmPassword != passwordState.text) {
+        val error = if (confirmPassword != uiState.passwordState.text) {
             "Passwords do not match."
         } else null
         confirmPasswordState = TextFieldState(text = confirmPassword, error = error, dirty = true)
     }
 
     Column {
-        UsernameField(state = usernameState, onValueChange = onUsernameChanged, hint = "Username")
-        EmailField(state = emailState, onValueChange = onEmailChanged, hint = "Email")
-        PasswordField(state = passwordState, onValueChange = onPasswordChanged, hint = "Password")
+        UsernameField(state = uiState.usernameState, onValueChange = onUsernameChanged, hint = "Username")
+        EmailField(state = uiState.emailState, onValueChange = onEmailChanged, hint = "Email")
+        PasswordField(state = uiState.passwordState, onValueChange = onPasswordChanged, hint = "Password")
         PasswordField(
             state = confirmPasswordState,
             onValueChange = onConfirmPasswordChanged,
@@ -52,12 +56,27 @@ fun SignupScreen(
             hint = "Confirm password hint",
             hintContentDescription = "Confirm password hint",
         )
-        Button(onClick = register) {
-            Text("Sign Up")
+
+        ButtonWithProgress(
+            onClick = register,
+            isInProgress = isInProgress,
+            progressIndicator = {
+                SmallCircularProgressIndicator(
+                    Modifier.semantics { contentDescription = "Sign-up in progress" }
+                )
+            }
+        ) {
+            Text("Sign Up", modifier = Modifier.alpha(signUpButtonTextAlpha))
         }
         Row {
             Text("Already registered?")
-            Text("Sign In", modifier = Modifier.clickable { navigateToLogin() })
+            Text(
+                "Sign In",
+                color = MaterialTheme.colors.secondary,
+                modifier = Modifier
+                    .clickable { navigateToLogin() }
+                    .padding(horizontal = 2.dp)
+            )
         }
     }
 }

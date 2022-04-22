@@ -14,7 +14,9 @@ object UsernameValidator : TextValidator {
 }
 
 object SimplePasswordValidator : TextValidator {
-    override fun validate(text: String): Boolean = text.length in (8..20)
+    private val regex = Regex("""^\S{8,20}$""")
+
+    override fun validate(text: String): Boolean = regex.matches(text)
 }
 
 object SimpleEmailValidator : TextValidator {
@@ -27,12 +29,18 @@ object AllowedUsersValidator : TextValidator {
     private val regex = Regex("""^(([A-Za-z0-9]{5,12})(?:,[^\S\r\n]*|$))+""")
     private val separatorRegex = Regex(""",\s*""")
 
-    override fun validate(text: String): Boolean = regex.matches(text)
+    override fun validate(text: String): Boolean = text.trim().let {
+        it.isBlank() || regex.matches(it)
+    }
 
     /**
      * Splits an input string around occurrences of the expected separator
      * for "allowed users" strings. Does not perform validation before
      * splitting.
      */
-    fun split(input: String): List<String> = separatorRegex.split(input)
+    fun split(input: String): List<String> = input.trim().let {
+        if (it.isBlank()) {
+            emptyList()
+        } else separatorRegex.split(it)
+    }
 }

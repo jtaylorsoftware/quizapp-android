@@ -4,6 +4,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
+import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import io.mockk.confirmVerified
 import io.mockk.every
 import io.mockk.mockk
@@ -40,10 +41,16 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenCreating_shouldHaveEditableQuizTitle() {
-        val quizState = QuizStateHolder()
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
+                uiState = uiState,
                 onSubmit = {}
             )
         }
@@ -56,13 +63,17 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenEditing_shouldHaveEditableQuizTitle() {
-        val quizState = QuizStateHolder()
-
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = true,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
-                isEditing = true,
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -74,10 +85,16 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenCreating_andIsPublic_shouldNotDisplayAllowedUsers() {
-        val quizState = QuizStateHolder()
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
+                uiState = uiState,
                 onSubmit = {}
             )
         }
@@ -87,12 +104,17 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenEditing_andIsPublic_shouldNotDisplayAllowedUsers() {
-        val quizState = QuizStateHolder()
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = true,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
-                isEditing = true,
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -101,11 +123,16 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenCreating_andIsNotPublic_canEditAllowedUsers() {
-        val quizState = QuizStateHolder()
-
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
+                uiState = uiState,
                 onSubmit = {}
             )
         }
@@ -122,13 +149,17 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenEditing_andIsNotPublic_canEditAllowedUsers() {
-        val quizState = QuizStateHolder()
-
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = true,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
-                isEditing = true,
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -144,12 +175,17 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenCreating_canEditExpiration() {
-        val quizState = QuizStateHolder()
-
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -162,13 +198,17 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenEditing_canEditExpiration() {
-        val quizState = QuizStateHolder()
-
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = true,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
-                isEditing = true,
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -181,12 +221,17 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenCreating_displaysFAB_andCanAddQuestion_andPickType() {
-        val quizState = QuizStateHolder()
-
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -205,13 +250,37 @@ class QuizEditorScreenTest {
     }
 
     @Test
-    fun whenCreating_canAddMultipleEmptyQuestion() {
-        val quizState = QuizStateHolder()
-
+    fun submitQuizButtonDisplaysSpinner_whenUploadStatusIsInProgress() {
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.InProgress,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
+                uiState = uiState,
+                onSubmit = {}
+            )
+        }
+
+        composeTestRule.onNodeWithContentDescription("Uploading quiz").assertIsDisplayed()
+    }
+
+    @Test
+    fun whenCreating_canAddMultipleEmptyQuestion() {
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
+        composeTestRule.setContent {
+            QuizEditorScreen(
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -222,12 +291,17 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenEditing_doesNotDisplayFAB_andCannotAddQuestions() {
-        val quizState = QuizStateHolder()
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = true,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
-                isEditing = true,
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -242,11 +316,17 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenCreating_oneTypeCanBeSelected() {
-        val quizState = QuizStateHolder()
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -286,11 +366,17 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenCreating_canAddAndDeleteMultipleChoiceAnswers() {
-        val quizState = QuizStateHolder()
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -311,8 +397,7 @@ class QuizEditorScreenTest {
         )
 
         // Should have editable text, delete button, radio button
-        composeTestRule.onNodeWithContentDescription("Pick answer 1")
-            .assertHasClickAction()
+        composeTestRule.onNodeWithContentDescription("Pick answer 1").performClick()
         composeTestRule.waitForIdle()
 
         assertThat(
@@ -343,14 +428,19 @@ class QuizEditorScreenTest {
 
     @Test
     fun whenCreating_canAddFillInQuestion() {
-        val quizState = QuizStateHolder()
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
+                uiState = uiState,
+                onSubmit = {}
             )
         }
-
         // Add FillIn
         composeTestRule.onNodeWithContentDescription("Add question").performClick()
         composeTestRule.onNodeWithContentDescription("Fill in the blank question").performClick()
@@ -370,22 +460,26 @@ class QuizEditorScreenTest {
     @Test
     fun whenEditing_cannotAddOrDeleteMultipleChoiceAnswers() {
         val questionData = mutableStateListOf<QuestionState>(
-            QuestionState.MultipleChoice(
+            fromQuestion(
                 Question.MultipleChoice(
                     answers = listOf(
                         Question.MultipleChoice.Answer("answer text 1"),
                         Question.MultipleChoice.Answer("answer text 2")
                     ),
                 ),
-                answerErrors = listOf(null, null)
             )
         )
-        val quizState = QuizStateHolder(questions = questionData)
+        val quizState = TestQuizStateHolder(questions = questionData)
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = true,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
-                isEditing = true,
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -406,21 +500,26 @@ class QuizEditorScreenTest {
     @Test
     fun whenCreating_canSelectCorrectMultipleChoiceAnswer() {
         val questionData = mutableStateListOf<QuestionState>(
-            QuestionState.MultipleChoice(
+           fromQuestion(
                 Question.MultipleChoice(
                     answers = listOf(
                         Question.MultipleChoice.Answer("answer text 1"),
                         Question.MultipleChoice.Answer("answer text 2")
                     ),
                 ),
-                answerErrors = listOf(null, null)
             )
         )
-        val quizState = QuizStateHolder(questions = questionData)
+        val quizState = TestQuizStateHolder(questions = questionData)
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -444,7 +543,7 @@ class QuizEditorScreenTest {
     @Test
     fun whenCreating_canDeleteCorrectAnswer() {
         val questionData = mutableStateListOf<QuestionState>(
-            QuestionState.MultipleChoice(
+            fromQuestion(
                 Question.MultipleChoice(
                     correctAnswer = 2, // start with "answer text 3" as correct
                     answers = listOf(
@@ -453,14 +552,19 @@ class QuizEditorScreenTest {
                         Question.MultipleChoice.Answer("answer text 3"),
                     ),
                 ),
-                answerErrors = listOf(null, null, null)
             )
         )
-        val quizState = QuizStateHolder(questions = questionData)
+        val quizState = TestQuizStateHolder(questions = questionData)
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -495,7 +599,7 @@ class QuizEditorScreenTest {
     @Test
     fun whenCreating_canDeleteCorrectAnswerOutOfOrder() {
         val questionData = mutableStateListOf<QuestionState>(
-            QuestionState.MultipleChoice(
+            fromQuestion(
                 Question.MultipleChoice(
                     correctAnswer = 1, // start with "answer text 2" as correct
                     answers = listOf(
@@ -504,14 +608,19 @@ class QuizEditorScreenTest {
                         Question.MultipleChoice.Answer("answer text 3"),
                     ),
                 ),
-                answerErrors = listOf(null, null, null)
             )
         )
-        val quizState = QuizStateHolder(questions = questionData)
+        val quizState = TestQuizStateHolder(questions = questionData)
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -555,22 +664,26 @@ class QuizEditorScreenTest {
     @Test
     fun whenEditing_cannotChangeMultipleChoiceCorrectAnswer() {
         val questionData = mutableStateListOf<QuestionState>(
-            QuestionState.MultipleChoice(
+            fromQuestion(
                 Question.MultipleChoice(
                     answers = listOf(
                         Question.MultipleChoice.Answer("answer text 1"),
                         Question.MultipleChoice.Answer("answer text 2")
                     )
                 ),
-                answerErrors = listOf(null, null)
             )
         )
-        val quizState = QuizStateHolder(questions = questionData)
+        val quizState = TestQuizStateHolder(questions = questionData)
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = true,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
-                isEditing = true,
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -582,22 +695,26 @@ class QuizEditorScreenTest {
     @Test
     fun whenEditing_cannotChangeQuestionType() {
         val questionData = mutableStateListOf<QuestionState>(
-            QuestionState.MultipleChoice(
+            fromQuestion(
                 Question.MultipleChoice(
                     answers = listOf(
                         Question.MultipleChoice.Answer("answer text 1"),
                         Question.MultipleChoice.Answer("answer text 2")
                     )
                 ),
-                answerErrors = listOf(null, null)
             )
         )
-        val quizState = QuizStateHolder(questions = questionData)
+        val quizState = TestQuizStateHolder(questions = questionData)
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = true,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
-                isEditing = true,
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -613,16 +730,21 @@ class QuizEditorScreenTest {
     @Test
     fun whenEditing_cannotChangeFillInAnswer() {
         val questionData = mutableStateListOf<QuestionState>(
-            QuestionState.FillIn(
+            fromQuestion(
                 Question.FillIn(correctAnswer = "The correct answer")
             )
         )
-        val quizState = QuizStateHolder(questions = questionData)
+        val quizState = TestQuizStateHolder(questions = questionData)
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = true,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
-                isEditing = true,
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -634,21 +756,26 @@ class QuizEditorScreenTest {
     @Test
     fun whenCreating_canDeleteQuestion() {
         val questionData = mutableStateListOf<QuestionState>(
-            QuestionState.MultipleChoice(
+            fromQuestion(
                 Question.MultipleChoice(
                     answers = listOf(
                         Question.MultipleChoice.Answer("answer text 1"),
                         Question.MultipleChoice.Answer("answer text 2")
                     )
                 ),
-                answerErrors = listOf(null, null)
             )
         )
-        val quizState = QuizStateHolder(questions = questionData)
+        val quizState = TestQuizStateHolder(questions = questionData)
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -660,23 +787,26 @@ class QuizEditorScreenTest {
     @Test
     fun whenEditing_cannotDeleteQuestion() {
         val questionData = mutableStateListOf<QuestionState>(
-            QuestionState.MultipleChoice(
+            fromQuestion(
                 Question.MultipleChoice(
                     answers = listOf(
                         Question.MultipleChoice.Answer("answer text 1"),
                         Question.MultipleChoice.Answer("answer text 2")
                     )
                 ),
-                answerErrors = listOf(null, null)
             )
         )
-        val quizState = QuizStateHolder(questions = questionData)
-
+        val quizState = TestQuizStateHolder(questions = questionData)
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = true,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = {},
-                isEditing = true,
+                uiState = uiState,
+                onSubmit = {}
             )
         }
 
@@ -687,12 +817,17 @@ class QuizEditorScreenTest {
     fun whenCreating_canSubmitQuiz() {
         val onSubmit = mockk<() -> Unit>()
         every { onSubmit() } returns Unit
-        val quizState = QuizStateHolder()
-
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = false,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = onSubmit,
+                uiState = uiState,
+                onSubmit = onSubmit
             )
         }
 
@@ -706,13 +841,17 @@ class QuizEditorScreenTest {
     fun whenEditing_canSubmitQuiz() {
         val onSubmit = mockk<() -> Unit>()
         every { onSubmit() } returns Unit
-        val quizState = QuizStateHolder()
-
+        val quizState = TestQuizStateHolder()
+        val uiState = QuizEditorUiState.Editor(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            isEditing = true,
+            quizState = quizState,
+        )
         composeTestRule.setContent {
             QuizEditorScreen(
-                quizState,
-                onSubmit = onSubmit,
-                isEditing = true,
+                uiState = uiState,
+                onSubmit = onSubmit
             )
         }
 

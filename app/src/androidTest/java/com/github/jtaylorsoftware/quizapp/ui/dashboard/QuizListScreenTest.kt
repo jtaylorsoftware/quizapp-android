@@ -1,12 +1,10 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizListing
+import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -16,8 +14,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
-
-class QuizScreenTest {
+class QuizListScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
@@ -53,9 +50,19 @@ class QuizScreenTest {
 
     @Test
     fun shouldDisplayHeader() {
+        val uiState = QuizListUiState.QuizList(
+            loading = LoadingState.NotStarted,
+            data = quizzes,
+            deleteQuizStatus = LoadingState.NotStarted,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizListScreen(quizzes, {}, {}, {})
+                QuizListScreen(
+                    uiState = uiState,
+                    onDeleteQuiz = {},
+                    navigateToEditor = {},
+                    navigateToResults = {},
+                )
             }
         }
 
@@ -64,9 +71,19 @@ class QuizScreenTest {
 
     @Test
     fun displaysEachQuizListing() {
+        val uiState = QuizListUiState.QuizList(
+            loading = LoadingState.NotStarted,
+            data = quizzes,
+            deleteQuizStatus = LoadingState.NotStarted,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizListScreen(quizzes, {}, {}, {})
+                QuizListScreen(
+                    uiState = uiState,
+                    onDeleteQuiz = {},
+                    navigateToEditor = {},
+                    navigateToResults = {},
+                )
             }
         }
 
@@ -79,16 +96,28 @@ class QuizScreenTest {
                 .assertIsDisplayed()
 
             // Link text displayed
-            // TODO - test if it's an actual link
-            composeTestRule.onNodeWithText("/quizzes/${quiz.id}", substring = true).assertIsDisplayed()
+            composeTestRule.onNodeWithText("quizzes/${quiz.id.value}", substring = true, useUnmergedTree = true).run {
+                assertIsDisplayed()
+                assertHasClickAction()
+            }
         }
     }
 
     @Test
     fun whenQuizExpired_showsText() {
+        val uiState = QuizListUiState.QuizList(
+            loading = LoadingState.NotStarted,
+            data = quizzes.subList(0, 1),
+            deleteQuizStatus = LoadingState.NotStarted,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizListScreen(quizzes.subList(0, 1), {}, {}, {})
+                QuizListScreen(
+                    uiState = uiState,
+                    onDeleteQuiz = {},
+                    navigateToEditor = {},
+                    navigateToResults = {},
+                )
             }
         }
 
@@ -97,9 +126,19 @@ class QuizScreenTest {
 
     @Test
     fun whenQuizNotExpired_doesNotShowExpiredText() {
+        val uiState = QuizListUiState.QuizList(
+            loading = LoadingState.NotStarted,
+            data = quizzes.subList(1, 2),
+            deleteQuizStatus = LoadingState.NotStarted,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizListScreen(quizzes.subList(1, 2), {}, {}, {})
+                QuizListScreen(
+                    uiState = uiState,
+                    onDeleteQuiz = {},
+                    navigateToEditor = {},
+                    navigateToResults = {},
+                )
             }
         }
 
@@ -108,9 +147,19 @@ class QuizScreenTest {
 
     @Test
     fun whenQuizCreatedDaysAgo_displaysCreatedDaysAgo() {
+        val uiState = QuizListUiState.QuizList(
+            loading = LoadingState.NotStarted,
+            data = quizzes.subList(0, 1),
+            deleteQuizStatus = LoadingState.NotStarted,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizListScreen(quizzes.subList(0, 1), {}, {}, {})
+                QuizListScreen(
+                    uiState = uiState,
+                    onDeleteQuiz = {},
+                    navigateToEditor = {},
+                    navigateToResults = {},
+                )
             }
         }
 
@@ -120,9 +169,19 @@ class QuizScreenTest {
 
     @Test
     fun whenQuizCreatedMonthsAgo_displaysCreatedMonthsAgo() {
+        val uiState = QuizListUiState.QuizList(
+            loading = LoadingState.NotStarted,
+            data = quizzes.subList(1, 2),
+            deleteQuizStatus = LoadingState.NotStarted,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizListScreen(quizzes.subList(1, 2), {}, {}, {})
+                QuizListScreen(
+                    uiState = uiState,
+                    onDeleteQuiz = {},
+                    navigateToEditor = {},
+                    navigateToResults = {},
+                )
             }
         }
 
@@ -132,9 +191,19 @@ class QuizScreenTest {
 
     @Test
     fun whenQuizCreatedYearsAgo_displaysCreatedYearsAgo() {
+        val uiState = QuizListUiState.QuizList(
+            loading = LoadingState.NotStarted,
+            data = quizzes.subList(2, 3),
+            deleteQuizStatus = LoadingState.NotStarted,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizListScreen(quizzes.subList(2, 3), {}, {}, {})
+                QuizListScreen(
+                    uiState = uiState,
+                    onDeleteQuiz = {},
+                    navigateToEditor = {},
+                    navigateToResults = {},
+                )
             }
         }
 
@@ -145,13 +214,23 @@ class QuizScreenTest {
     @Test
     fun whenClickDeleteIcon_callsDeleteQuiz() {
         var quizId: ObjectId? = null
-        val onDeleteQuiz:(ObjectId) -> Unit = {
+        val onDeleteQuiz: (ObjectId) -> Unit = {
             quizId = it
         }
 
+        val uiState = QuizListUiState.QuizList(
+            loading = LoadingState.NotStarted,
+            data = quizzes.subList(0, 1),
+            deleteQuizStatus = LoadingState.NotStarted,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizListScreen(quizzes.subList(0, 1), onDeleteQuiz = onDeleteQuiz, {}, {})
+                QuizListScreen(
+                    uiState = uiState,
+                    onDeleteQuiz = onDeleteQuiz,
+                    navigateToEditor = {},
+                    navigateToResults = {},
+                )
             }
         }
 
@@ -164,13 +243,23 @@ class QuizScreenTest {
     @Test
     fun whenClickEditIcon_callsNavigateToEditor() {
         var quizId: ObjectId? = null
-        val navigateToEditor: (ObjectId) -> Unit = {
-             quizId = it
+        val navigateToEditor: (ObjectId?) -> Unit = {
+            quizId = it
         }
 
+        val uiState = QuizListUiState.QuizList(
+            loading = LoadingState.NotStarted,
+            data = quizzes.subList(0, 1),
+            deleteQuizStatus = LoadingState.NotStarted,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizListScreen(quizzes.subList(0, 1), {}, navigateToEditor = navigateToEditor, {})
+                QuizListScreen(
+                    uiState = uiState,
+                    onDeleteQuiz = {},
+                    navigateToEditor = navigateToEditor,
+                    navigateToResults = {},
+                )
             }
         }
 
@@ -187,9 +276,19 @@ class QuizScreenTest {
             quizId = it
         }
 
+        val uiState = QuizListUiState.QuizList(
+            loading = LoadingState.NotStarted,
+            data = quizzes.subList(0, 1),
+            deleteQuizStatus = LoadingState.NotStarted,
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                QuizListScreen(quizzes.subList(0, 1), {}, {}, navigateToResults = navigateToResults)
+                QuizListScreen(
+                    uiState = uiState,
+                    onDeleteQuiz = {},
+                    navigateToEditor = {},
+                    navigateToResults = navigateToResults,
+                )
             }
         }
 

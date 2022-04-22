@@ -20,7 +20,7 @@ interface QuizResultNetworkSource {
      * Gets all users' results for a Quiz, if the signed-in user created the
      * Quiz.
      */
-    suspend fun getAllForQuiz(quiz: String): NetworkResult<List<QuizResultDto>>
+    suspend fun getAllForQuiz(quiz: String): NetworkResult<QuizResultsForQuizDto>
 
     /**
      * Gets one user's [QuizResultListingDto] for a Quiz, if the signed-in user submitted
@@ -34,7 +34,7 @@ interface QuizResultNetworkSource {
     /**
      * Gets all [QuizResultListingDto] for a Quiz, if the signed-in user created the Quiz.
      */
-    suspend fun getAllListingForQuiz(quiz: String): NetworkResult<List<QuizResultListingDto>>
+    suspend fun getAllListingForQuiz(quiz: String): NetworkResult<QuizResultListingsForQuizDto>
 
     /**
      * Submits a user's [response][QuestionResponseDto] to a Quiz. The API will respond with
@@ -57,7 +57,7 @@ interface QuizResultService : QuizResultNetworkSource {
     ): NetworkResult<QuizResultDto>
 
     @GET("results?format=full")
-    override suspend fun getAllForQuiz(@Query("quiz") quiz: String): NetworkResult<List<QuizResultDto>>
+    override suspend fun getAllForQuiz(@Query("quiz") quiz: String): NetworkResult<QuizResultsForQuizDto>
 
     @GET("results?format=listing")
     override suspend fun getListingForQuizByUser(
@@ -66,7 +66,7 @@ interface QuizResultService : QuizResultNetworkSource {
     ): NetworkResult<QuizResultListingDto>
 
     @GET("results?format=listing")
-    override suspend fun getAllListingForQuiz(@Query("quiz") quiz: String): NetworkResult<List<QuizResultListingDto>>
+    override suspend fun getAllListingForQuiz(@Query("quiz") quiz: String): NetworkResult<QuizResultListingsForQuizDto>
 
     @POST("results")
     override suspend fun createResultForQuiz(

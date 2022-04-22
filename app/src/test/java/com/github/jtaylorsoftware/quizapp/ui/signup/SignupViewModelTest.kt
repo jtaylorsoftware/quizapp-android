@@ -1,5 +1,7 @@
 package com.github.jtaylorsoftware.quizapp.ui.signup
 
+import com.github.jtaylorsoftware.quizapp.auth.AuthenticationState
+import com.github.jtaylorsoftware.quizapp.auth.FakeAuthStateManager
 import com.github.jtaylorsoftware.quizapp.data.domain.FakeUserAuthService
 import com.github.jtaylorsoftware.quizapp.data.domain.Result
 import com.github.jtaylorsoftware.quizapp.data.domain.UserAuthService
@@ -27,6 +29,7 @@ class SignupViewModelTest {
     private lateinit var networkSource: FakeUserNetworkSource
     private lateinit var service: UserAuthService
     private lateinit var viewModel: SignupViewModel
+    private lateinit var authStateManager: FakeAuthStateManager
 
     @Before
     fun beforeEach() {
@@ -34,7 +37,8 @@ class SignupViewModelTest {
         userCache = FakeUserCache()
         networkSource = FakeUserNetworkSource()
         service = FakeUserAuthService(userCache, networkSource)
-        viewModel = SignupViewModel(service, Dispatchers.Main)
+        authStateManager = FakeAuthStateManager()
+        viewModel = SignupViewModel(service, authStateManager, Dispatchers.Main)
     }
 
     @After
@@ -48,7 +52,7 @@ class SignupViewModelTest {
         viewModel.setUsername(username)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as SignupUiState.Form).usernameState.text,
+            viewModel.uiState.usernameState.text,
             `is`(username)
         )
     }
@@ -60,7 +64,7 @@ class SignupViewModelTest {
         viewModel.setUsername(username)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as SignupUiState.Form).usernameState.error,
+            viewModel.uiState.usernameState.error,
             `is`(notNullValue())
         )
 
@@ -69,7 +73,7 @@ class SignupViewModelTest {
         viewModel.setUsername(username)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as SignupUiState.Form).usernameState.error,
+            viewModel.uiState.usernameState.error,
             `is`(notNullValue())
         )
 
@@ -78,7 +82,7 @@ class SignupViewModelTest {
         viewModel.setUsername(username)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as SignupUiState.Form).usernameState.error,
+            viewModel.uiState.usernameState.error,
             `is`(notNullValue())
         )
     }
@@ -89,7 +93,7 @@ class SignupViewModelTest {
         viewModel.setPassword(password)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as SignupUiState.Form).passwordState.text,
+            viewModel.uiState.passwordState.text,
             `is`(password)
         )
     }
@@ -101,7 +105,7 @@ class SignupViewModelTest {
         viewModel.setPassword(password)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as SignupUiState.Form).passwordState.error,
+            viewModel.uiState.passwordState.error,
             `is`(notNullValue())
         )
 
@@ -110,7 +114,7 @@ class SignupViewModelTest {
         viewModel.setPassword(password)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as SignupUiState.Form).passwordState.error,
+            viewModel.uiState.passwordState.error,
             `is`(notNullValue())
         )
     }
@@ -120,7 +124,7 @@ class SignupViewModelTest {
         val email = "email@example.com"
         viewModel.setEmail(email)
         advanceUntilIdle()
-        val text = (viewModel.uiState.value as SignupUiState.Form).emailState.text
+        val text = viewModel.uiState.emailState.text
         assertThat(text, `is`(email))
     }
 
@@ -131,7 +135,7 @@ class SignupViewModelTest {
         viewModel.setEmail(email)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as SignupUiState.Form).emailState.error,
+            viewModel.uiState.emailState.error,
             `is`(notNullValue())
         )
 
@@ -140,7 +144,7 @@ class SignupViewModelTest {
         viewModel.setEmail(email)
         advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as SignupUiState.Form).emailState.error,
+            viewModel.uiState.emailState.error,
             `is`(notNullValue())
         )
     }
@@ -157,8 +161,8 @@ class SignupViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            viewModel.uiState.value.loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            viewModel.uiState.registerStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
         )
 
         // Only pass has errors
@@ -171,8 +175,8 @@ class SignupViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            viewModel.uiState.value.loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            viewModel.uiState.registerStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
         )
 
         // Both have errors
@@ -183,8 +187,8 @@ class SignupViewModelTest {
         viewModel.register()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value.loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            viewModel.uiState.registerStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
         )
     }
 
@@ -194,8 +198,8 @@ class SignupViewModelTest {
         viewModel.register()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value.loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            viewModel.uiState.registerStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
         )
     }
 
@@ -206,7 +210,7 @@ class SignupViewModelTest {
             delay(1000)
             Result.success()
         }
-        viewModel = SignupViewModel(mockService, Dispatchers.Main)
+        viewModel = SignupViewModel(mockService, authStateManager, Dispatchers.Main)
 
         viewModel.setUsername("username")
         viewModel.setPassword("password")
@@ -216,24 +220,21 @@ class SignupViewModelTest {
         viewModel.register()
         advanceTimeBy(100)
         assertThat(
-            viewModel.uiState.value.loading,
+            viewModel.uiState.registerStatus,
             IsInstanceOf(LoadingState.InProgress::class.java)
         )
     }
 
     @Test
-    fun `register sets uiState register and clears loading after successful register`() =
+    fun `register sets registerStatus to Success and notifies AuthStateManager on success`() =
         runTest {
             viewModel.setUsername("username")
             viewModel.setEmail("email@example.com")
             viewModel.setPassword("password")
             viewModel.register()
             advanceUntilIdle()
-            assertThat(
-                viewModel.uiState.value.loading,
-                IsInstanceOf(LoadingState.AwaitingAction::class.java)
-            )
-            assertThat(viewModel.uiState.value, IsInstanceOf(SignupUiState.SignedUp::class.java))
+            assertThat(authStateManager.state, IsInstanceOf(AuthenticationState.Authenticated::class.java))
+            assertThat(viewModel.uiState.registerStatus, IsInstanceOf(LoadingState.Success::class.java))
         }
 
     @Test
@@ -249,15 +250,15 @@ class SignupViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            viewModel.uiState.value.loading,
+            viewModel.uiState.registerStatus,
             IsInstanceOf(LoadingState.Error::class.java)
         )
         assertThat(
-            (viewModel.uiState.value as SignupUiState.Form).usernameState.error,
+            viewModel.uiState.usernameState.error,
             `is`(notNullValue())
         )
         assertThat(
-            (viewModel.uiState.value as SignupUiState.Form).passwordState.error,
+            viewModel.uiState.passwordState.error,
             `is`(notNullValue())
         )
     }
@@ -274,7 +275,7 @@ class SignupViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            viewModel.uiState.value.loading,
+            viewModel.uiState.registerStatus,
             IsInstanceOf(LoadingState.Error::class.java)
         )
     }
@@ -291,7 +292,7 @@ class SignupViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            viewModel.uiState.value.loading,
+            viewModel.uiState.registerStatus,
             IsInstanceOf(LoadingState.Error::class.java)
         )
     }

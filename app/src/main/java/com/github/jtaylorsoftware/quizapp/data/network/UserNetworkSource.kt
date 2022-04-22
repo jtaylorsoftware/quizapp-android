@@ -39,12 +39,12 @@ interface UserNetworkSource {
     /**
      * Attempts to change the signed-in user's email.
      */
-    suspend fun changeEmail(email: String): NetworkResult<Unit>
+    suspend fun changeEmail(email: ChangeEmailRequest): NetworkResult<Unit>
 
     /**
      * Changes the signed-in user's password.
      */
-    suspend fun changePassword(password: String): NetworkResult<Unit>
+    suspend fun changePassword(password: ChangePasswordRequest): NetworkResult<Unit>
 }
 
 
@@ -61,15 +61,15 @@ interface UserService: UserNetworkSource {
     @GET("users/me")
     override suspend fun getProfile(): NetworkResult<UserDto>
 
-    @GET("users/me/quizzes")
+    @GET("users/me/quizzes?format=listing")
     override suspend fun getQuizzes(): NetworkResult<List<QuizListingDto>>
 
-    @GET("users/me/results")
+    @GET("users/me/results?format=listing")
     override suspend fun getResults(): NetworkResult<List<QuizResultListingDto>>
 
     @PUT("users/me/email")
-    override suspend fun changeEmail(email: String): NetworkResult<Unit>
+    override suspend fun changeEmail(@Body email: ChangeEmailRequest): NetworkResult<Unit>
 
     @PUT("users/me/password")
-    override suspend fun changePassword(password: String): NetworkResult<Unit>
+    override suspend fun changePassword(@Body password: ChangePasswordRequest): NetworkResult<Unit>
 }

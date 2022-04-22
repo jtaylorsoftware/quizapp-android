@@ -1,22 +1,24 @@
 package com.github.jtaylorsoftware.quizapp.ui.quiz
 
+import androidx.compose.runtime.*
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.github.jtaylorsoftware.quizapp.data.domain.QuizRepository
-import com.github.jtaylorsoftware.quizapp.data.domain.QuizResultRepository
-import com.github.jtaylorsoftware.quizapp.data.domain.ResponseValidationErrors
-import com.github.jtaylorsoftware.quizapp.data.domain.Result
+import com.github.jtaylorsoftware.quizapp.data.domain.*
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
 import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuestionResponse
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
 import com.github.jtaylorsoftware.quizapp.di.DefaultDispatcher
-import com.github.jtaylorsoftware.quizapp.ui.*
+import com.github.jtaylorsoftware.quizapp.ui.LoadingState
+import com.github.jtaylorsoftware.quizapp.ui.UiState
+import com.github.jtaylorsoftware.quizapp.ui.UiStateSource
+import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
+import com.github.jtaylorsoftware.quizapp.ui.isInProgress
 import com.github.jtaylorsoftware.quizapp.util.WaitGroup
+import com.github.jtaylorsoftware.quizapp.util.anyAsync
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -30,6 +32,10 @@ sealed interface QuizFormUiState : UiState {
     data class Form(
         override val loading: LoadingState,
         val quiz: QuizForm,
+        /**
+         * Progress for uploading the responses.
+         */
+        val uploadStatus: LoadingState,
         val responses: List<FormResponseState>
     ) : QuizFormUiState
 
@@ -41,20 +47,13 @@ sealed interface QuizFormUiState : UiState {
         override val loading: LoadingState
     ) : QuizFormUiState
 
-    /**
-     * The user must sign in again to view this resource.
-     */
-    object RequireSignIn : QuizFormUiState {
-        override val loading: LoadingState = LoadingState.Error(ErrorStrings.UNAUTHORIZED.message)
-    }
-
     companion object {
         internal fun fromViewModelState(state: QuizFormViewModelState) = when {
-            state.unauthorized -> RequireSignIn
-            state.quiz == null -> NoQuiz(state.loadingState)
+            state.quiz == null -> NoQuiz(state.loading)
             else -> Form(
-                state.loadingState,
+                state.loading,
                 state.quiz,
+                state.uploadStatus,
                 state.responses,
             )
         }
@@ -62,12 +61,13 @@ sealed interface QuizFormUiState : UiState {
 }
 
 internal data class QuizFormViewModelState(
-    override val loading: Boolean = false,
-    override val error: String? = null,
-    val unauthorized: Boolean = false,
+    val loading: LoadingState = LoadingState.NotStarted,
+    val uploadStatus: LoadingState = LoadingState.NotStarted,
     val quiz: QuizForm? = null,
     val responses: List<FormResponseState> = emptyList(),
-) : ViewModelState
+) {
+    val screenIsBusy: Boolean = loading.isInProgress || uploadStatus.isInProgress
+}
 
 @HiltViewModel
 class QuizFormViewModel @Inject constructor(
@@ -75,7 +75,7 @@ class QuizFormViewModel @Inject constructor(
     private val quizRepository: QuizRepository,
     private val quizResultRepository: QuizResultRepository,
     @DefaultDispatcher private val dispatcher: CoroutineDispatcher,
-) : ViewModel() {
+) : ViewModel(), UiStateSource {
     private val quizId: ObjectId =
         ObjectId(requireNotNull(savedStateHandle.get<String>("quiz")) {
             "QuizFormViewModel must be given a quiz id"
@@ -84,81 +84,28 @@ class QuizFormViewModel @Inject constructor(
     // Used for waiting on validation to finish before submitting responses
     private val waitGroup = WaitGroup(viewModelScope + dispatcher)
 
-    private val state = MutableStateFlow(QuizFormViewModelState())
+    private val responses = mutableStateListOf<ValidatedFormResponseState>()
 
-    val uiState = state
-        .map { QuizFormUiState.fromViewModelState(it) }
-        .stateIn(
-            viewModelScope,
-            SharingStarted.Eagerly,
-            QuizFormUiState.fromViewModelState(state.value)
-        )
+    private var state by mutableStateOf(QuizFormViewModelState())
+    override val uiState by derivedStateOf { QuizFormUiState.fromViewModelState(state) }
 
     init {
         loadQuiz()
     }
 
-    fun changeResponse(index: Int, newResponse: QuestionResponse) {
-        if (state.value.loading) {
-            return
-        }
-
-        if (index < 0 || index >= state.value.responses.size) {
-            throw IndexOutOfBoundsException()
-        }
-
-        val response = state.value.responses[index]
-        require(response.response.type == newResponse.type) {
-            "Cannot change QuestionResponse type"
-        }
-
-        viewModelScope.launch(dispatcher) {
-            // Immediately apply updates
-            state.update {
-                it.copy(
-                    responses = it.responses.toMutableList().apply {
-                        this[index] = this[index].copy(response = newResponse)
-                    }
-                )
-            }
-            // Add a validation job
-            waitGroup.add {
-                state.update {
-                    it.copy(
-                        responses = validateResponses(
-                            requireNotNull(it.quiz).questions,
-                            it.responses
-                        )
-                    )
-                }
-            }
-        }
-    }
-
     /**
-     * Validates and then attempts to submit the quiz responses. When successful,
-     * this function immediately invokes [onSuccess] within the context of [Dispatchers.Main]
-     * without emitting a new value of [uiState].
+     * Validates and then attempts to submit the quiz responses.
      */
-    fun submit(onSuccess: () -> Unit) {
-        if (state.value.loading) {
+    fun uploadResponses() {
+        if (state.screenIsBusy) {
             return
         }
 
-        state.update {
-            it.copy(loading = true)
-        }
+        state = state.copy(uploadStatus = LoadingState.InProgress)
 
         viewModelScope.launch(dispatcher) {
             waitGroup.add {
-                state.update {
-                    it.copy(
-                        responses = validateResponses(
-                            requireNotNull(it.quiz).questions,
-                            it.responses
-                        )
-                    )
-                }
+                validateResponses()
             }
 
             // Try to wait for all validations to finish - because mutators don't run if
@@ -170,76 +117,38 @@ class QuizFormViewModel @Inject constructor(
                 // Validations didn't finish, to ensure prompt submission just let server validate it
             }
 
-            val currentResponses = state.value.responses
-
             // Check for errors
-            if (responsesHaveErrors(currentResponses)) {
-                state.update {
-                    it.copy(loading = false, error = "Please fix form errors.")
-                }
+            if (responsesHaveErrors()) {
+                state = state.copy(uploadStatus = LoadingState.Error(FailureReason.FORM_HAS_ERRORS))
                 return@launch
             }
 
             val result = quizResultRepository.createResponseForQuiz(
-                currentResponses.map { it.response },
+                responses.map { it.response.data },
                 quizId
             )
-            handleSubmitResult(result, onSuccess)
+            handleSubmitResult(result)
         }
     }
 
-    private suspend fun handleSubmitResult(
-        result: Result<ObjectId, ResponseValidationErrors>,
-        onSuccess: () -> Unit
-    ) = when (result) {
-        is Result.Success -> {
-            withContext(Dispatchers.Main) {
-                onSuccess()
+    private fun handleSubmitResult(
+        result: Result<ObjectId, ResponseValidationErrors>
+    ) {
+        state = when (result) {
+            is Result.Success -> {
+                state.copy(
+                    uploadStatus = LoadingState.Success(SuccessStrings.SUBMITTED_QUIZ_RESPONSE)
+                )
             }
-        }
-        is Result.BadRequest -> state.update {
-            it.copy(
-                loading = false,
-                error = "Please fix form errors.",
-                responses = mergeErrors(it.responses, result.error.answerErrors)
-            )
-        }
-        is Result.Unauthorized -> state.update {
-            it.copy(
-                loading = false,
-                unauthorized = true
-            )
-        }
-        is Result.Expired -> state.update {
-            it.copy(
-                loading = false,
-                error = "This Quiz has expired."
-            )
-        }
-        is Result.Forbidden -> state.update {
-            it.copy(
-                loading = false,
-                error = ErrorStrings.FORBIDDEN.message
-            )
-        }
-        is Result.NetworkError -> state.update {
-            it.copy(
-                loading = false,
-                error = ErrorStrings.NETWORK.message
-            )
-        }
-        else -> state.update {
-            it.copy(
-                loading = false,
-                error = ErrorStrings.UNKNOWN.message
-            )
+            is Result.Failure -> {
+                mergeErrors(result.errors?.answerErrors ?: emptyList())
+                state.copy(uploadStatus = LoadingState.Error(result.reason))
+            }
         }
     }
 
     private fun loadQuiz() {
-        state.update {
-            it.copy(loading = true)
-        }
+        state = state.copy(loading = LoadingState.InProgress)
 
         viewModelScope.launch {
             val result = quizRepository.getFormForQuiz(quizId)
@@ -247,100 +156,156 @@ class QuizFormViewModel @Inject constructor(
         }
     }
 
-    private suspend fun handleLoadResult(result: Result<QuizForm, Any?>) = withContext(dispatcher) {
-        when (result) {
-            is Result.Success -> state.update {
-                it.copy(
-                    quiz = result.value,
-                    responses = createResponses(result.value),
-                    error = null,
-                    loading = false,
-                )
-            }
-            is Result.NotFound -> state.update {
-                it.copy(
-                    error = ErrorStrings.NOT_FOUND.message,
-                    loading = false,
-                )
-            }
-            is Result.Unauthorized -> state.update {
-                QuizFormViewModelState(unauthorized = true)
-            }
-            is Result.Forbidden -> state.update {
-                it.copy(
-                    loading = false,
-                    error = ErrorStrings.FORBIDDEN.message
-                )
-            }
-            is Result.NetworkError -> state.update {
-                it.copy(
-                    loading = false,
-                    error = ErrorStrings.NETWORK.message
-                )
-            }
-            else -> state.update {
-                it.copy(
-                    loading = false,
-                    error = ErrorStrings.UNKNOWN.message
-                )
+    private suspend fun handleLoadResult(result: ResultOrFailure<QuizForm>) =
+        withContext(dispatcher) {
+            state = when (result) {
+                is Result.Success -> {
+                    createResponses(result.value)
+                    state.copy(
+                        quiz = result.value,
+                        responses = responses.map { it.response },
+                        loading = LoadingState.Success()
+                    )
+                }
+                is Result.Failure -> {
+                    state.copy(loading = LoadingState.Error(result.reason))
+                }
             }
         }
-    }
 
     /**
      * Creates the appropriate types of [FormResponseState] for each question of the quiz.
      */
-    private fun createResponses(quiz: QuizForm): List<FormResponseState> =
-        quiz.questions.map { question ->
-            when (question) {
-                is Question.FillIn -> FormResponseState(response = QuestionResponse.FillIn())
-                is Question.MultipleChoice -> FormResponseState(response = QuestionResponse.MultipleChoice())
-                is Question.Empty -> throw IllegalStateException("Can not create QuestionResponse for Question.Empty")
+    private fun createResponses(quiz: QuizForm) {
+        quiz.questions.forEach { question ->
+            responses.add(
+                when (question) {
+                    is Question.FillIn -> FillInHolder()
+                    is Question.MultipleChoice -> MultipleChoiceHolder(question.answers.size)
+                    is Question.Empty -> throw IllegalStateException("Can not create QuestionResponse for Question.Empty")
+                }
+            )
+        }
+    }
+
+    private suspend fun responsesHaveErrors(): Boolean = responses.anyAsync { it.hasErrors() }
+
+    /**
+     * Merges the current responses' errors with a list of those from the repository (network API).
+     */
+    private fun mergeErrors(
+        errors: List<String?>
+    ) {
+        errors.forEachIndexed { index, err ->
+            if (index in responses.indices) {
+                val response = responses[index]
+                responses[index] = when (response) {
+                    is FillInHolder -> FillInHolder(response.answer.text, err)
+                    is MultipleChoiceHolder -> MultipleChoiceHolder(
+                        response.numAnswers,
+                        response.choice,
+                        err
+                    )
+                }
             }
         }
+    }
 
-    private fun responsesHaveErrors(responses: List<FormResponseState>): Boolean = responses.any {
-        it.error != null
+    private suspend fun validateResponses() {
+        supervisorScope {
+            responses.map {
+                async { it.revalidate() }
+            }.awaitAll()
+        }
     }
 
     /**
-     * Merges the current responses' errors with a list of those from the repository.
+     * A [FormResponseState] that can be revalidated on demand.
      */
-    private fun mergeErrors(responses: List<FormResponseState>, errors: List<String?>): List<FormResponseState> {
-        val merged = responses.toMutableList()
-        errors.forEachIndexed { index, err ->
-            if (index in merged.indices) {
-                merged[index] = merged[index].copy(error = err)
+    private sealed interface ValidatedFormResponseState {
+        /**
+         * The held [FormResponseState] being validated.
+         */
+        val response: FormResponseState
+
+        /**
+         * Runs revalidation of this [FormResponseState].
+         */
+        suspend fun revalidate()
+
+        /**
+         * Returns `true` if this [FormResponseState] currently has errors.
+         */
+        suspend fun hasErrors(): Boolean
+    }
+
+    private inner class MultipleChoiceHolder(
+        val numAnswers: Int,
+        choice: Int = -1,
+        error: String? = null,
+    ) : ValidatedFormResponseState, FormResponseState.MultipleChoice {
+        override val response: FormResponseState = this
+
+        private var _choice by mutableStateOf(choice)
+        override var choice: Int
+            get() = _choice
+            set(value) {
+                if (state.screenIsBusy || value !in (0..numAnswers)) {
+                    return
+                }
+                _choice = value
+            }
+
+        override var error: String? by mutableStateOf(error)
+
+        override val data: QuestionResponse
+            get() = QuestionResponse.MultipleChoice(choice)
+
+        override suspend fun revalidate() {
+            error = if (choice == -1) {
+                // Never selected an answer
+                "Select an answer"
+            } else {
+                null
             }
         }
-        return merged
+
+        override suspend fun hasErrors(): Boolean = error != null
     }
 
-    private suspend fun validateResponses(
-        questions: List<Question>,
-        responses: List<FormResponseState>
-    ) = coroutineScope {
-        responses.mapIndexed { index, responseState ->
-            async { validateResponse(questions[index], responseState.response) }
-        }.awaitAll()
-    }
+    private inner class FillInHolder(
+        answer: String = "",
+        error: String? = null,
+    ) : ValidatedFormResponseState, FormResponseState.FillIn {
+        override val response: FormResponseState = this
 
-    private fun validateResponse(
-        question: Question,
-        response: QuestionResponse
-    ): FormResponseState =
-        when (response) {
-            is QuestionResponse.MultipleChoice -> FormResponseState(
-                response = response,
-                error = if (response.choice == -1 || response.choice >= (question as Question.MultipleChoice).answers.size) {
-                    "Please select an answer."
-                } else null
-            )
-            is QuestionResponse.FillIn -> FormResponseState(
-                response = response,
-                error = if (response.answer.isBlank()) {
-                    "Please input an answer."
-                } else null
-            )
+        override var answer by mutableStateOf(TextFieldState(text = answer))
+            private set
+
+        override var error: String? by mutableStateOf(error)
+
+        override val data: QuestionResponse
+            get() = QuestionResponse.FillIn(answer = answer.text)
+
+        override fun changeAnswer(text: String) {
+            if (state.screenIsBusy) {
+                return
+            }
+
+            answer = answer.copy(text = text)
+            validateAnswer()
         }
+
+        override suspend fun revalidate() {
+            validateAnswer()
+        }
+
+        override suspend fun hasErrors(): Boolean = answer.error != null
+
+        private fun validateAnswer() {
+            if (answer.text.isBlank()) {
+                answer = answer.copy(error = "Enter an answer", dirty = true)
+            }
+        }
+    }
 }

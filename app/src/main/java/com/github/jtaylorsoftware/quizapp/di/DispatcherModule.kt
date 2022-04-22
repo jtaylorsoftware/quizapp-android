@@ -4,10 +4,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CoroutineName
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.plus
+import kotlinx.coroutines.*
 import javax.inject.Qualifier
 import javax.inject.Singleton
 
@@ -17,17 +14,17 @@ object DispatcherModule {
     @Provides
     @Singleton
     @AppMainScope
-    fun provideAppMainScope() = MainScope() + CoroutineName("AppGlobalScope")
+    fun provideAppMainScope(): CoroutineScope = MainScope() + CoroutineName("AppMainScope")
 
     @Provides
     @Singleton
     @IoDispatcher
-    fun provideIoDispatcher() = Dispatchers.IO
+    fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
 
     @Provides
     @Singleton
     @DefaultDispatcher
-    fun provideDefaultDispatcher() = Dispatchers.Default
+    fun provideDefaultDispatcher(): CoroutineDispatcher = Dispatchers.Default
 }
 
 @Qualifier

@@ -24,6 +24,11 @@ data class QuizResultDto(
 )
 
 @JsonClass(generateAdapter = true)
+data class QuizResultsForQuizDto(
+    val results: List<QuizResultDto> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
 data class QuizResultListingDto(
     @Json(name = "_id")
     val id: String = "",
@@ -37,6 +42,11 @@ data class QuizResultListingDto(
     val quizTitle: String = "",
     @Json(name = "ownerUsername")
     val createdBy: String = "",
+)
+
+@JsonClass(generateAdapter = true)
+data class QuizResultListingsForQuizDto(
+    val results: List<QuizResultListingDto> = emptyList()
 )
 
 sealed interface GradedAnswerDto {

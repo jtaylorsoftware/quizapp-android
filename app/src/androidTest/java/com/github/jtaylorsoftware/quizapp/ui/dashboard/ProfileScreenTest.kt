@@ -7,6 +7,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
 import com.github.jtaylorsoftware.quizapp.data.domain.models.User
+import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
 import com.github.jtaylorsoftware.quizapp.util.toLocalizedString
 import io.mockk.confirmVerified
@@ -32,14 +33,26 @@ class ProfileScreenTest {
 
     @Test
     fun shouldDisplayContent() {
+        val uiState = ProfileUiState.Profile(
+            loading = LoadingState.NotStarted,
+            data = user
+        )
         composeTestRule.setContent {
-            QuizAppTheme { ProfileScreen(user, {}, {}, {}) }
+            QuizAppTheme {
+                ProfileScreen(
+                    uiState = uiState,
+                    navigateToQuizScreen = {},
+                    navigateToResultScreen = {},
+                    navigateToProfileEditor = {},
+                )
+            }
         }
 
         // Topmost ("Profile") card content
         composeTestRule.onNodeWithText("Hello, ${user.username}").assertIsDisplayed()
         composeTestRule.onNodeWithText("Email: ${user.email}").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Joined: ${user.date.toLocalizedString()}").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Joined: ${user.date.toLocalizedString()}")
+            .assertIsDisplayed()
         composeTestRule.onNodeWithText("Edit Profile").assertHasClickAction()
 
         // Card showing number of quizzes created with button to view list
@@ -52,20 +65,29 @@ class ProfileScreenTest {
     }
 
     @Test
-    fun editProfile_whenClicked_shouldDisplayProfileScreen() {
-        val navigateToProfileScreen = mockk<() -> Unit>()
-        every { navigateToProfileScreen() } returns Unit
+    fun editProfile_whenClicked_shouldDisplayProfileEditScreen() {
+        val navigateToProfileEditor = mockk<() -> Unit>()
+        every { navigateToProfileEditor() } returns Unit
 
+        val uiState = ProfileUiState.Profile(
+            loading = LoadingState.NotStarted,
+            data = user
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileScreen(user, {}, {}, navigateToProfileScreen)
+                ProfileScreen(
+                    uiState = uiState,
+                    navigateToQuizScreen = {},
+                    navigateToResultScreen = {},
+                    navigateToProfileEditor = navigateToProfileEditor,
+                )
             }
         }
 
         composeTestRule.onNodeWithText("Edit Profile").performClick()
 
-        verify(exactly = 1) { navigateToProfileScreen() }
-        confirmVerified(navigateToProfileScreen)
+        verify(exactly = 1) { navigateToProfileEditor() }
+        confirmVerified(navigateToProfileEditor)
     }
 
     @Test
@@ -73,9 +95,18 @@ class ProfileScreenTest {
         val navigateToQuizScreen = mockk<() -> Unit>()
         every { navigateToQuizScreen() } returns Unit
 
+        val uiState = ProfileUiState.Profile(
+            loading = LoadingState.NotStarted,
+            data = user
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileScreen(user, navigateToQuizScreen, {}, {})
+                ProfileScreen(
+                    uiState = uiState,
+                    navigateToQuizScreen = navigateToQuizScreen,
+                    navigateToResultScreen = {},
+                    navigateToProfileEditor = {},
+                )
             }
         }
 
@@ -90,9 +121,18 @@ class ProfileScreenTest {
         val navigateToResultScreen = mockk<() -> Unit>()
         every { navigateToResultScreen() } returns Unit
 
+        val uiState = ProfileUiState.Profile(
+            loading = LoadingState.NotStarted,
+            data = user
+        )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileScreen(user, {}, navigateToResultScreen, {})
+                ProfileScreen(
+                    uiState = uiState,
+                    navigateToQuizScreen = {},
+                    navigateToResultScreen = navigateToResultScreen,
+                    navigateToProfileEditor = {},
+                )
             }
         }
 

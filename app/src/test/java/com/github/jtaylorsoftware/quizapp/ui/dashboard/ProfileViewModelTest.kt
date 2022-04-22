@@ -1,5 +1,7 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
+import com.github.jtaylorsoftware.quizapp.auth.AuthenticationState
+import com.github.jtaylorsoftware.quizapp.auth.FakeAuthStateManager
 import com.github.jtaylorsoftware.quizapp.data.domain.*
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
 import com.github.jtaylorsoftware.quizapp.data.domain.models.User
@@ -20,6 +22,7 @@ import io.mockk.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.*
 import org.hamcrest.MatcherAssert.assertThat
 import org.hamcrest.Matchers.*
@@ -37,6 +40,7 @@ class ProfileViewModelTest {
     private lateinit var quizResultListingDbSource: FakeQuizResultListingDatabaseSource
     private lateinit var service: UserAuthService
     private lateinit var viewModel: ProfileViewModel
+    private lateinit var authStateManager: FakeAuthStateManager
 
     private val userId = ObjectId("aewirojadlkflzmdfakl")
     private val userDto = UserDto(id = userId.value, email = "emailOne@email.com")
@@ -66,7 +70,8 @@ class ProfileViewModelTest {
             quizResultListingDbSource
         )
         service = FakeUserAuthService(userCache, networkSource)
-        viewModel = ProfileViewModel(repository, service, Dispatchers.Main)
+        authStateManager = FakeAuthStateManager()
+        viewModel = ProfileViewModel(repository, service, authStateManager, Dispatchers.Main)
     }
 
     @After
@@ -75,22 +80,44 @@ class ProfileViewModelTest {
     }
 
     @Test
-    fun `should load profile data immediately`() = runTest {
+    fun `should begin with LoadingState NotStarted and NoProfile`() = runTest {
         // Should first be Loading, before initial refresh
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(ProfileUiState.NoProfile::class.java)
+        )
+
+        assertThat(
+            viewModel.uiState.loading,
+            IsInstanceOf(LoadingState.NotStarted::class.java)
+        )
+    }
+
+    @Test
+    fun `refresh should set loading to InProgress and then load data`() = runTest {
+        val mockUserRepository = spyk(repository)
+        viewModel = ProfileViewModel(mockUserRepository, service, authStateManager, Dispatchers.Main)
+        every { mockUserRepository.getProfile() } returns flow {
+            delay(500)
+            emit(Result.success(User.fromDto(userDto)))
+        }
+
+        viewModel.refresh()
+        advanceTimeBy(100)
+        assertThat(
+            viewModel.uiState.loading,
+            IsInstanceOf(LoadingState.InProgress::class.java)
         )
 
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.value,
+            viewModel.uiState,
             IsInstanceOf(ProfileUiState.Profile::class.java)
         )
     }
 
     @Test
-    fun `should set uiState to RequireSignIn when getting profile results in Http Unauthorized`() =
+    fun `should notify AuthStateManager when getting profile results in Http Unauthorized`() =
         runTest {
             // local cache has no value, so force error in network to cause Unauthorized
             networkSource.failOnNextWith(NetworkResult.HttpError(401))
@@ -99,8 +126,8 @@ class ProfileViewModelTest {
             advanceUntilIdle()
 
             assertThat(
-                viewModel.uiState.value,
-                IsInstanceOf(ProfileUiState.RequireSignIn::class.java)
+                authStateManager.state,
+                IsInstanceOf(AuthenticationState.RequireAuthentication::class.java)
             )
         }
 
@@ -108,21 +135,21 @@ class ProfileViewModelTest {
     fun `refresh should do nothing if already refreshing data`() = runTest {
         val mockRepository = spyk(repository)
         coEvery { mockRepository.getProfile() } coAnswers {
+            delay(500)
             repository.getProfile()
         }
 
-        viewModel = ProfileViewModel(mockRepository, service, Dispatchers.Main)
-        // Finish initial load - call #1
-        advanceUntilIdle()
+        viewModel = ProfileViewModel(mockRepository, service, authStateManager, Dispatchers.Main)
 
-        // Do first refresh - call #2, sets loading = true
         viewModel.refresh()
-        // Immediately try another - would be call #3
+        // Enter refresh
+        advanceTimeBy(100)
+
+        // Try to call while still refreshing
         viewModel.refresh()
-        advanceUntilIdle()
 
         // Should be 2 calls
-        coVerify(exactly = 2) {
+        coVerify(exactly = 1) {
             mockRepository.getProfile()
         }
         confirmVerified(mockRepository)
@@ -146,18 +173,17 @@ class ProfileViewModelTest {
             quizResultListingDbSource
         )
         service = FakeUserAuthService(userCache, networkSource)
-        viewModel = ProfileViewModel(repository, service, Dispatchers.Main)
+        viewModel = ProfileViewModel(repository, service, authStateManager, Dispatchers.Main)
 
         every { mockUser.id } returns userDto.id
         every { mockUser.email } returns "emailOne@example.com" andThen "emailTwo@example.com"
 
-        // Should be initial value
         viewModel.refresh()
         advanceUntilIdle()
 
         // Should be the initial value - "emailOne"
         assertThat(
-            (viewModel.uiState.value as ProfileUiState.Profile).data.email,
+            (viewModel.uiState as ProfileUiState.Profile).data.email,
             `is`("emailOne@example.com")
         )
 
@@ -167,14 +193,16 @@ class ProfileViewModelTest {
 
         // Should now be new value - "emailTwo" (latest value returned from networkSource)
         assertThat(
-            (viewModel.uiState.value as ProfileUiState.Profile).data.email,
+            (viewModel.uiState as ProfileUiState.Profile).data.email,
             `is`("emailTwo@example.com")
         )
     }
 
     @Test
     fun `setEmail updates the uiState email text value`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
@@ -182,13 +210,15 @@ class ProfileViewModelTest {
         viewModel.setEmail(email)
         advanceUntilIdle()
 
-        val text = (viewModel.uiState.value as ProfileUiState.Editor).emailState.text
+        val text = (viewModel.uiState as ProfileUiState.Editor).emailState.text
         assertThat(text, `is`(email))
     }
 
     @Test
     fun `setEmail validates the email`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
@@ -197,7 +227,7 @@ class ProfileViewModelTest {
         viewModel.setEmail(email)
         advanceUntilIdle()
 
-        var error = (viewModel.uiState.value as ProfileUiState.Editor).emailState.error
+        var error = (viewModel.uiState as ProfileUiState.Editor).emailState.error
         assertThat(error, `is`(notNullValue()))
 
         // Not email
@@ -205,28 +235,32 @@ class ProfileViewModelTest {
         viewModel.setEmail(email)
         advanceUntilIdle()
 
-        error = (viewModel.uiState.value as ProfileUiState.Editor).emailState.error
+        error = (viewModel.uiState as ProfileUiState.Editor).emailState.error
         assertThat(error, `is`(notNullValue()))
     }
 
     @Test
     fun `submitEmail does nothing when emailState has errors`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
         viewModel.setEmail("adflkadjk")
         viewModel.submitEmail()
+        advanceUntilIdle()
 
         // Should do nothing since it has errors
         assertThat(
-            (viewModel.uiState.value as ProfileUiState.Editor).loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            (viewModel.uiState as ProfileUiState.Editor).submitEmailStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
         )
     }
 
     @Test
     fun `submitEmail validates email again before calling service`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
         viewModel.openEditor()
         advanceUntilIdle()
@@ -236,8 +270,8 @@ class ProfileViewModelTest {
         advanceUntilIdle()
 
         assertThat(
-            (viewModel.uiState.value as ProfileUiState.Editor).loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            (viewModel.uiState as ProfileUiState.Editor).submitEmailStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
         )
     }
 
@@ -252,8 +286,10 @@ class ProfileViewModelTest {
             Result.success()
         }
 
-        viewModel = ProfileViewModel(repository, mockService, Dispatchers.Main)
+        viewModel = ProfileViewModel(repository, mockService, authStateManager, Dispatchers.Main)
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
@@ -263,14 +299,16 @@ class ProfileViewModelTest {
         advanceTimeBy(100)
 
         assertThat(
-            (viewModel.uiState.value as ProfileUiState.Editor).loading,
+            (viewModel.uiState as ProfileUiState.Editor).submitEmailStatus,
             IsInstanceOf(LoadingState.InProgress::class.java)
         )
     }
 
     @Test
     fun `submitEmail sets emailState error when service fails with HTTP error`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
@@ -285,34 +323,39 @@ class ProfileViewModelTest {
         advanceUntilIdle()
 
         // Should complete loading
-        val state = (viewModel.uiState.value as ProfileUiState.Editor)
-        assertThat(state.loading, IsInstanceOf(LoadingState.AwaitingAction::class.java))
+        val state = (viewModel.uiState as ProfileUiState.Editor)
+        assertThat(state.submitEmailStatus, IsInstanceOf(LoadingState.Error::class.java))
 
         // Should have error in emailState
         assertThat(state.emailState.error, `is`(notNullValue()))
     }
 
     @Test
-    fun `submitEmail sets uiState loading to Error when service fails with network error`() = runTest {
-        advanceUntilIdle()
-        viewModel.openEditor()
-        advanceUntilIdle()
+    fun `submitEmail sets uiState loading to Error when service fails with network error`() =
+        runTest {
+            viewModel.refresh()
+            advanceUntilIdle()
 
-        // set valid email
-        viewModel.setEmail("email@example.com")
+            viewModel.openEditor()
+            advanceUntilIdle()
 
-        // force an error
-        networkSource.failOnNextWith(NetworkResult.NetworkError(IllegalArgumentException()))
-        viewModel.submitEmail()
-        advanceUntilIdle()
+            // set valid email
+            viewModel.setEmail("email@example.com")
 
-        val state = (viewModel.uiState.value as ProfileUiState.Editor)
-        assertThat(state.loading, IsInstanceOf(LoadingState.Error::class.java))
-    }
+            // force an error
+            networkSource.failOnNextWith(NetworkResult.NetworkError(IllegalArgumentException()))
+            viewModel.submitEmail()
+            advanceUntilIdle()
+
+            val state = (viewModel.uiState as ProfileUiState.Editor)
+            assertThat(state.submitEmailStatus, IsInstanceOf(LoadingState.Error::class.java))
+        }
 
     @Test
     fun `setPassword updates the uiState username text value`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
@@ -320,13 +363,15 @@ class ProfileViewModelTest {
         viewModel.setPassword(password)
         advanceUntilIdle()
 
-        val text = (viewModel.uiState.value as ProfileUiState.Editor).passwordState.text
+        val text = (viewModel.uiState as ProfileUiState.Editor).passwordState.text
         assertThat(text, `is`(password))
     }
 
     @Test
     fun `setPassword validates the password`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
@@ -335,7 +380,7 @@ class ProfileViewModelTest {
         viewModel.setPassword(password)
         advanceUntilIdle()
 
-        var error = (viewModel.uiState.value as ProfileUiState.Editor).passwordState.error
+        var error = (viewModel.uiState as ProfileUiState.Editor).passwordState.error
         assertThat(error, `is`(notNullValue()))
 
         // Length > 20
@@ -343,13 +388,15 @@ class ProfileViewModelTest {
         viewModel.setPassword(password)
         advanceUntilIdle()
 
-        error = (viewModel.uiState.value as ProfileUiState.Editor).passwordState.error
+        error = (viewModel.uiState as ProfileUiState.Editor).passwordState.error
         assertThat(error, `is`(notNullValue()))
     }
 
     @Test
     fun `submitPassword does nothing when passwordState has errors`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
@@ -357,21 +404,24 @@ class ProfileViewModelTest {
         viewModel.submitPassword()
         advanceUntilIdle()
 
-        val state = (viewModel.uiState.value as ProfileUiState.Editor)
-        assertThat(state.loading, IsInstanceOf(LoadingState.AwaitingAction::class.java))
+        val state = (viewModel.uiState as ProfileUiState.Editor)
+        assertThat(state.submitPasswordStatus, IsInstanceOf(LoadingState.Error::class.java))
     }
 
     @Test
     fun `submitPassword validates password again before calling service`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
         // Should do nothing since it has errors
         viewModel.submitPassword()
+        advanceUntilIdle()
         assertThat(
-            (viewModel.uiState.value as ProfileUiState.Editor).loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            (viewModel.uiState as ProfileUiState.Editor).submitPasswordStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
         )
     }
 
@@ -386,7 +436,8 @@ class ProfileViewModelTest {
             Result.success()
         }
 
-        viewModel = ProfileViewModel(repository, mockService, Dispatchers.Main)
+        viewModel = ProfileViewModel(repository, mockService, authStateManager, Dispatchers.Main)
+        viewModel.refresh()
         advanceUntilIdle()
 
         // Set to correct screen
@@ -398,14 +449,16 @@ class ProfileViewModelTest {
         advanceTimeBy(100)
 
         assertThat(
-            (viewModel.uiState.value as ProfileUiState.Editor).loading,
+            (viewModel.uiState as ProfileUiState.Editor).submitPasswordStatus,
             IsInstanceOf(LoadingState.InProgress::class.java)
         )
     }
 
     @Test
     fun `submitPassword sets passwordState error when service fails with HTTP error`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
@@ -417,12 +470,12 @@ class ProfileViewModelTest {
         viewModel.submitPassword()
         advanceUntilIdle()
 
-        val state = (viewModel.uiState.value as ProfileUiState.Editor)
+        val state = (viewModel.uiState as ProfileUiState.Editor)
 
         // Should complete loading
         assertThat(
-            (viewModel.uiState.value as ProfileUiState.Editor).loading,
-            IsInstanceOf(LoadingState.AwaitingAction::class.java)
+            (viewModel.uiState as ProfileUiState.Editor).submitPasswordStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
         )
 
         // Should have error in emailState
@@ -431,7 +484,9 @@ class ProfileViewModelTest {
 
     @Test
     fun `submitPassword sets uiState error when service fails with network error`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
@@ -443,23 +498,26 @@ class ProfileViewModelTest {
         viewModel.submitPassword()
         advanceUntilIdle()
 
-        val state = (viewModel.uiState.value as ProfileUiState.Editor)
-        assertThat(state.loading, IsInstanceOf(LoadingState.Error::class.java))
+        val state = (viewModel.uiState as ProfileUiState.Editor)
+        assertThat(state.submitPasswordStatus, IsInstanceOf(LoadingState.Error::class.java))
     }
 
     @Test
     fun `openEditor should set TextFieldStates to non-null values`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
+
         viewModel.openEditor()
         advanceUntilIdle()
 
-        val state = (viewModel.uiState.value as ProfileUiState.Editor)
+        val state = (viewModel.uiState as ProfileUiState.Editor)
         assertThat(state.emailState, `is`(notNullValue()))
         assertThat(state.passwordState, `is`(notNullValue()))
     }
 
     @Test
     fun `closeEditor should set TextFieldStates to null values`() = runTest {
+        viewModel.refresh()
         advanceUntilIdle()
 
         viewModel.openEditor()
@@ -468,33 +526,42 @@ class ProfileViewModelTest {
         viewModel.closeEditor()
         advanceUntilIdle()
 
-        assertThat(viewModel.uiState.value, IsInstanceOf(ProfileUiState.Profile::class.java))
+        assertThat(viewModel.uiState, IsInstanceOf(ProfileUiState.Profile::class.java))
     }
 
     @Test
-    fun `UiState is RequireSignIn if ViewModelState has unauthorized flag set`() = runTest {
-        val state = ProfileViewModelState(unauthorized = true)
-        val uiState = ProfileUiState.fromViewModelState(state)
-        assertThat(uiState, IsInstanceOf(ProfileUiState.RequireSignIn::class.java))
-    }
+    fun `logout should clear token and notify AuthStateManager`() = runTest {
+        viewModel.refresh()
+        advanceUntilIdle()
 
-    @Test
-    fun `UiState is NoProfile if ViewModelState isLoading and screen data is null`() = runTest {
-        val state = ProfileViewModelState(
-            loading = true,
-            unauthorized = false,
-            data = null,
+        viewModel.logOut()
+        advanceUntilIdle()
+
+        assertThat(
+            authStateManager.state,
+            IsInstanceOf(AuthenticationState.RequireAuthentication::class.java)
         )
-        val uiState = ProfileUiState.fromViewModelState(state)
-        assertThat(uiState, IsInstanceOf(ProfileUiState.NoProfile::class.java))
+        assertThat((service.userIsSignedIn() as Result.Success).value, `is`(false))
+        assertThat(userCache.loadToken(), `is`(nullValue()))
+        assertThat(userCache.loadUser(), `is`(nullValue()))
     }
 
     @Test
-    fun `UiState is NoProfile if ViewModelState not isLoading or unauthorized and screen data is null`() =
+    fun `UiState is NoProfile if ViewModelState loading InProgress and screen data is null`() =
         runTest {
             val state = ProfileViewModelState(
-                loading = false,
-                unauthorized = false,
+                loading = LoadingState.InProgress,
+                data = null,
+            )
+            val uiState = ProfileUiState.fromViewModelState(state)
+            assertThat(uiState, IsInstanceOf(ProfileUiState.NoProfile::class.java))
+        }
+
+    @Test
+    fun `UiState is NoProfile if ViewModelState loading not InProgress and screen data is null`() =
+        runTest {
+            val state = ProfileViewModelState(
+                loading = LoadingState.NotStarted,
                 data = null,
             )
             val uiState = ProfileUiState.fromViewModelState(state)
@@ -505,11 +572,10 @@ class ProfileViewModelTest {
         }
 
     @Test
-    fun `UiState is Profile if ViewModelState not loading or unauthorized and both TextFieldStates are null`() =
+    fun `UiState is Profile if ViewModelState not loading and both TextFieldStates are null`() =
         runTest {
             val state = ProfileViewModelState(
-                loading = false,
-                unauthorized = false,
+                loading = LoadingState.Success(),
                 data = User(),
             )
             val uiState = ProfileUiState.fromViewModelState(state)
@@ -520,11 +586,10 @@ class ProfileViewModelTest {
         }
 
     @Test
-    fun `UiState is Editor if ViewModelState not loading or unauthorized and both TextFieldStates are not null`() =
+    fun `UiState is Editor if ViewModelState not loading and both TextFieldStates are not null`() =
         runTest {
             val state = ProfileViewModelState(
-                loading = false,
-                unauthorized = false,
+                loading = LoadingState.Success(),
                 data = User(),
                 emailState = TextFieldState(),
                 passwordState = TextFieldState(),

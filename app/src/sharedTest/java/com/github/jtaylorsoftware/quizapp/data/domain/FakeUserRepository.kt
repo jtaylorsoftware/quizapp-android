@@ -22,7 +22,7 @@ class FakeUserRepository(
     private val quizListingDatabaseSource: QuizListingDatabaseSource = FakeQuizListingDatabaseSource(),
     private val resultListingDatabaseSource: QuizResultListingDatabaseSource = FakeQuizResultListingDatabaseSource(),
 ) : UserRepository {
-    override fun getProfile(): Flow<Result<User, Any?>> = flow {
+    override fun getProfile(): Flow<ResultOrFailure<User>> = flow {
         userCache.loadUser()?.let {
             emit(Result.success(User.fromEntity(it)))
         }
@@ -32,14 +32,14 @@ class FakeUserRepository(
                 emit(Result.success(User.fromDto(networkResult.value)))
             }
             is NetworkResult.HttpError -> {
-                emit(Result.Unauthorized)
+                emit(Result.Failure(FailureReason.UNAUTHORIZED))
             }
-            is NetworkResult.NetworkError -> emit(Result.NetworkError)
-            else -> emit(Result.UnknownError)
+            is NetworkResult.NetworkError -> emit(Result.Failure(FailureReason.NETWORK))
+            else -> emit(Result.Failure(FailureReason.UNKNOWN))
         }
     }
 
-    override fun getQuizzes(): Flow<Result<List<QuizListing>, Any?>> = flow {
+    override fun getQuizzes(): Flow<ResultOrFailure<List<QuizListing>>> = flow {
         userCache.loadUser()?.run {
             val entities = quizListingDatabaseSource.getAllCreatedByUser(id)
             val listings = entities.map { QuizListing.fromEntity(it) }
@@ -51,14 +51,14 @@ class FakeUserRepository(
                 emit(Result.success(networkResult.value.map { QuizListing.fromDto(it) }))
             }
             is NetworkResult.HttpError -> {
-                emit(Result.Unauthorized)
+                emit(Result.Failure(FailureReason.UNAUTHORIZED))
             }
-            is NetworkResult.NetworkError -> emit(Result.NetworkError)
-            else -> emit(Result.UnknownError)
+            is NetworkResult.NetworkError -> emit(Result.Failure(FailureReason.NETWORK))
+            else -> emit(Result.Failure(FailureReason.UNKNOWN))
         }
     }
 
-    override fun getResults(): Flow<Result<List<QuizResultListing>, Any?>> = flow {
+    override fun getResults(): Flow<ResultOrFailure<List<QuizResultListing>>> = flow {
         userCache.loadUser()?.run {
             val entities = resultListingDatabaseSource.getAllByUser(id)
             val listings = entities.map { QuizResultListing.fromEntity(it) }
@@ -70,10 +70,10 @@ class FakeUserRepository(
                 emit(Result.success(networkResult.value.map { QuizResultListing.fromDto(it) }))
             }
             is NetworkResult.HttpError -> {
-                emit(Result.Unauthorized)
+                emit(Result.Failure(FailureReason.UNAUTHORIZED))
             }
-            is NetworkResult.NetworkError -> emit(Result.NetworkError)
-            else -> emit(Result.UnknownError)
+            is NetworkResult.NetworkError -> emit(Result.Failure(FailureReason.NETWORK))
+            else -> emit(Result.Failure(FailureReason.UNKNOWN))
         }
     }
 }

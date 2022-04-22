@@ -143,12 +143,12 @@ sealed interface GradedAnswer {
             is GradedAnswerDto.MultipleChoice -> MultipleChoice(
                 isCorrect = requireNotNull(dto.isCorrect),
                 choice = dto.choice,
-                correctAnswer = requireNotNull(dto.correctAnswer)
+                correctAnswer = dto.correctAnswer
             )
             is GradedAnswerDto.FillIn -> FillIn(
                 isCorrect = requireNotNull(dto.isCorrect),
                 answer = dto.answer,
-                correctAnswer = requireNotNull(dto.correctAnswer)
+                correctAnswer = dto.correctAnswer
             )
         }
     }

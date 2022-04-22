@@ -5,7 +5,6 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
-import com.github.jtaylorsoftware.quizapp.data.domain.models.QuestionResponse
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
 import io.mockk.confirmVerified
 import io.mockk.justRun
@@ -55,10 +54,10 @@ class QuizFormScreenTest {
         questions.forEach {
             when (it) {
                 is Question.MultipleChoice -> {
-                    responses.add(FormResponseState(QuestionResponse.MultipleChoice()))
+                    responses.add(TestMultipleChoiceResponseStateHolder())
                 }
                 is Question.FillIn -> {
-                    responses.add(FormResponseState(QuestionResponse.FillIn()))
+                    responses.add(TestFillInResponseStateHolder())
                 }
                 else -> throw IllegalArgumentException()
             }
@@ -71,7 +70,6 @@ class QuizFormScreenTest {
             QuizFormScreen(
                 quiz,
                 responses,
-                onChangeResponse = { _, _ -> },
                 onSubmit = {})
         }
 
@@ -85,13 +83,13 @@ class QuizFormScreenTest {
             QuizFormScreen(
                 quiz,
                 responses,
-                onChangeResponse = { _, _ -> },
                 onSubmit = {})
         }
 
-        composeTestRule.onAllNodesWithText("Tap an answer to mark it as your choice").assertCountEquals(
-            questions.count { it is Question.MultipleChoice }
-        )
+        composeTestRule.onAllNodesWithText("Tap an answer to mark it as your choice")
+            .assertCountEquals(
+                questions.count { it is Question.MultipleChoice }
+            )
 
         questions.forEachIndexed { i, question ->
             composeTestRule.onNodeWithText("${i + 1}. ${question.text}:").assertIsDisplayed()
@@ -102,7 +100,10 @@ class QuizFormScreenTest {
                         composeTestRule.onNodeWithText("${j + 1}. ${answer.text}")
                             .assertHasClickAction()
                         composeTestRule
-                            .onNodeWithTag("Select answer ${j + 1} for question ${i + 1}", useUnmergedTree = true)
+                            .onNodeWithTag(
+                                "Select answer ${j + 1} for question ${i + 1}",
+                                useUnmergedTree = true
+                            )
                             .assertHasClickAction()
                     }
                 }
@@ -115,33 +116,25 @@ class QuizFormScreenTest {
 
     @Test
     fun canSelectMultipleChoiceAnswer() {
-        val changeResponse: (Int, FormResponseState) -> Unit = { i, r ->
-            responses[i] = r
-        }
         composeTestRule.setContent {
             QuizFormScreen(
                 quiz,
                 responses,
-                onChangeResponse = changeResponse,
                 onSubmit = {})
         }
 
         composeTestRule.onNodeWithTag("Select answer 2 for question 1", useUnmergedTree = true)
             .performClick()
 
-        assertEquals(1, (responses[0].response as QuestionResponse.MultipleChoice).choice)
+        assertEquals(1, (responses[0] as FormResponseState.MultipleChoice).choice)
     }
 
     @Test
     fun canEditFillInAnswer() {
-        val changeResponse: (Int, FormResponseState) -> Unit = { i, r ->
-            responses[i] = r
-        }
         composeTestRule.setContent {
             QuizFormScreen(
                 quiz,
                 responses,
-                onChangeResponse = changeResponse,
                 onSubmit = {})
         }
 
@@ -149,7 +142,7 @@ class QuizFormScreenTest {
         composeTestRule.onNodeWithTag("Fill in answer for question 2")
             .performTextInput(answerText)
 
-        assertEquals(answerText, (responses[1].response as QuestionResponse.FillIn).answer)
+        assertEquals(answerText, (responses[1] as FormResponseState.FillIn).answer.text)
     }
 
     @Test
@@ -161,8 +154,8 @@ class QuizFormScreenTest {
             QuizFormScreen(
                 quiz,
                 responses,
-                onChangeResponse = { _, _ -> },
-                onSubmit = onSubmit)
+                onSubmit = onSubmit
+            )
         }
 
         composeTestRule.onNodeWithContentDescription("Submit responses").performClick()
