@@ -6,6 +6,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -35,23 +36,24 @@ import java.time.LocalTime
  * The AM [Button] uses `contentDescription` of `"Set time to AM"`
  * The PM [Button] uses `contentDescription` of `"Set time to PM"`
  *
- * @param value The default time value.
+ * @param value The current [LocalTime] value.
+ *
+ * @param onValueChange Callback invoked when the user is trying to change the value.
+ *
  * @param open Whether this Dialog should be open.
- * @param onDismiss Callback invoked when the Dialog is dismissed. Receives the current time input
- *                  as its parameter.
+ *
+ * @param onDismiss Callback invoked when the Dialog is dismissed.
  */
 @Composable
 fun AppTimePicker(
     value: LocalTime,
+    onValueChange: (LocalTime) -> Unit,
     open: Boolean,
-    onDismiss: (LocalTime) -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    var localValue: LocalTime by remember { mutableStateOf(LocalTime.of(value.hour, value.minute)) }
     if (open) {
-        Dialog(onDismissRequest = {
-            onDismiss(localValue)
-        }) {
-            AppTimePickerContent(localValue, onTimeChange = { localValue = it })
+        Dialog(onDismissRequest = onDismiss) {
+            AppTimePickerContent(value, onTimeChange = onValueChange)
         }
     }
 }
@@ -64,14 +66,14 @@ private fun AppTimePickerContent(
     value: LocalTime,
     onTimeChange: (LocalTime) -> Unit
 ) {
-    var hour: Int by remember { mutableStateOf(if (value.hour % 12 == 0) 12 else value.hour % 12) }
-    var minute: Int by remember { mutableStateOf(value.minute) }
-    var period: String by remember(value.hour) { mutableStateOf(if (value.hour < LocalTime.NOON.hour) "AM" else "PM") }
+    // Convert hour into a 12-hour value
+    val hour by derivedStateOf { if (value.hour % 12 == 0) 12 else value.hour % 12 }
+    var period by remember(value.hour) { mutableStateOf(if (value.hour < LocalTime.NOON.hour) "AM" else "PM") }
     val minuteFocusRequester: FocusRequester = remember { FocusRequester() }
 
-    fun adjustTime(newHour: Int = hour, newMinute: Int = minute, newPeriod: String = period) {
+    fun adjustTime(newHour: Int = hour, newMinute: Int = value.minute, newPeriod: String = period) {
         if (newPeriod == "AM") {
-            onTimeChange(LocalTime.of(newHour, newMinute))
+            onTimeChange(LocalTime.of(newHour % 12, newMinute))
         } else {
             onTimeChange(LocalTime.of((newHour % 12) + 12, newMinute))
         }
@@ -100,12 +102,10 @@ private fun AppTimePickerContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 HourPicker(hour = hour, onHourChange = {
-                    hour = it
                     adjustTime(newHour = it)
                 }, minuteFocusRequester = minuteFocusRequester)
                 Spacer(Modifier.width(8.dp))
-                MinutePicker(minute = minute, onMinuteChange = {
-                    minute = it
+                MinutePicker(minute = value.minute, onMinuteChange = {
                     adjustTime(newMinute = it)
                 }, focusRequester = minuteFocusRequester)
                 Spacer(Modifier.width(8.dp))
@@ -153,7 +153,7 @@ private fun HourPicker(
     onHourChange: (Int) -> Unit,
     minuteFocusRequester: FocusRequester
 ) {
-    var hourText: String by remember { mutableStateOf(hour.toString().padStart(2, '0')) }
+    var hourText: String by rememberSaveable { mutableStateOf(hour.toString().padStart(2, '0')) }
 
     Column(
         modifier = Modifier.padding(horizontal = 0.dp, vertical = 24.dp),
@@ -166,12 +166,12 @@ private fun HourPicker(
             onValueChange = {
                 val text = it.text
                 if (text.isNotBlank()) {
-                    onHourChange(text.transformHour().let { hr ->
-                        if (hr == -1) {
+                    onHourChange(text.transformHour().let { newHour ->
+                        if (newHour == -1) {
                             hour
                         } else {
-                            hourText = hr.toString()
-                            hr
+                            hourText = newHour.toString()
+                            newHour
                         }
                     })
                 } else {
@@ -222,7 +222,11 @@ private fun MinutePicker(
     onMinuteChange: (Int) -> Unit,
     focusRequester: FocusRequester
 ) {
-    var minuteText: String by remember { mutableStateOf(minute.toString().padStart(2, '0')) }
+    var minuteText: String by rememberSaveable {
+        mutableStateOf(
+            minute.toString().padStart(2, '0')
+        )
+    }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
@@ -237,15 +241,15 @@ private fun MinutePicker(
             onValueChange = {
                 val text = it.text
                 if (text.isNotBlank()) {
-                    onMinuteChange(text.transformMinute().let { mn ->
-                        if (mn == -1) {
+                    onMinuteChange(text.transformMinute().let { newMinute ->
+                        if (newMinute == -1) {
                             minute
                         } else {
                             minuteText = if (minuteText == "0") {
-                                mn.toString().padStart(2, '0')
-                            } else mn.toString()
+                                newMinute.toString().padStart(2, '0')
+                            } else newMinute.toString()
 
-                            mn
+                            newMinute
                         }
                     })
                 } else {

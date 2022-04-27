@@ -24,37 +24,43 @@ import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * [UiState] that holds the representation for either the [ProfileScreen] or the [ProfileEditorScreen].
+ * [UiState] that holds the representation for either the [ProfileScreen] or the [ProfileSettings].
  *
  * It may instead hold neither representation if data is loading or there is a critical error.
  */
 sealed interface ProfileUiState : UiState {
     /**
-     * The data for the Profile is loaded.
+     * The data for the Profile.
      */
     data class Profile(
         override val loading: LoadingState,
-        val data: User,
-    ) : ProfileUiState
 
-    /**
-     * The data for the ProfileEditor is loaded.
-     */
-    data class Editor(
-        override val loading: LoadingState,
+        /**
+         * The user's profile data.
+         */
         val data: User,
-        val emailState: TextFieldState,
-        val passwordState: TextFieldState,
+
+        val settingsOpen: Boolean,
+
+        /**
+         * State of Settings dialog email field
+         */
+        val emailState: TextFieldState? = null,
+
+        /**
+         * State of Settings dialog password field
+         */
+        val passwordState: TextFieldState? = null,
 
         /**
          * Progress for email submission
          */
-        val submitEmailStatus: LoadingState,
+        val submitEmailStatus: LoadingState? = null,
 
         /**
          * Progress for password submission.
          */
-        val submitPasswordStatus: LoadingState,
+        val submitPasswordStatus: LoadingState? = null,
     ) : ProfileUiState
 
     /**
@@ -66,41 +72,38 @@ sealed interface ProfileUiState : UiState {
 
     companion object {
         internal fun fromViewModelState(state: ProfileViewModelState) =
-            when {
-                state.data == null -> NoProfile(
-                    state.loading,
-                )
-                state.emailState != null && state.passwordState != null -> Editor(
-                    state.loading,
-                    state.data,
-                    state.emailState,
-                    state.passwordState,
-                    state.submitEmailStatus,
-                    state.submitPasswordStatus
-                )
-                else -> Profile(
-                    state.loading,
-                    state.data,
-                )
-            }
+            if (state.data == null) NoProfile(
+                state.loading,
+            )
+            else Profile(
+                state.loading,
+                state.data,
+                state.settingsOpen,
+                state.emailState,
+                state.passwordState,
+                state.submitEmailStatus,
+                state.submitPasswordStatus
+            )
     }
 }
 
 /**
- * Internal state representation for both the [ProfileScreen] and [ProfileEditorScreen].
+ * Internal state representation for both the [ProfileScreen] and [ProfileSettings].
  */
 internal data class ProfileViewModelState(
     val loading: LoadingState = LoadingState.NotStarted,
     val data: User? = null,
     val emailState: TextFieldState? = null,
     val passwordState: TextFieldState? = null,
-    val submitEmailStatus: LoadingState = LoadingState.NotStarted,
-    val submitPasswordStatus: LoadingState = LoadingState.NotStarted,
+    val submitEmailStatus: LoadingState? = null,
+    val submitPasswordStatus: LoadingState? = null,
 ) {
-    val editing: Boolean = emailState != null && passwordState != null
+    val settingsOpen: Boolean = emailState != null && passwordState != null
 
     val screenIsBusy: Boolean =
-        loading.isInProgress || submitEmailStatus.isInProgress || submitPasswordStatus.isInProgress
+        loading.isInProgress ||
+                submitEmailStatus?.isInProgress == true ||
+                submitPasswordStatus?.isInProgress == true
 }
 
 @HiltViewModel
@@ -118,6 +121,10 @@ class ProfileViewModel @Inject constructor(
     private var state by mutableStateOf(ProfileViewModelState())
     override val uiState by derivedStateOf { ProfileUiState.fromViewModelState(state) }
 
+    init {
+        refresh()
+    }
+
     /**
      * Logs out the current user and clears their cached profile data.
      */
@@ -127,17 +134,17 @@ class ProfileViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            closeEditor()
+            closeSettings()
             userAuthService.signOut()
             authEventProducer.onRequireLogIn()
         }
     }
 
     /**
-     * Changes the [uiState] to represent the required data for the [ProfileEditorScreen].
+     * Changes the [uiState] to represent the required data for the [ProfileSettings].
      */
-    fun openEditor() {
-        if (state.editing || state.screenIsBusy) {
+    fun openSettings() {
+        if (state.settingsOpen || state.screenIsBusy) {
             return
         }
 
@@ -150,8 +157,8 @@ class ProfileViewModel @Inject constructor(
     /**
      * Changes the [uiState] to represent just the data for the [ProfileScreen].
      */
-    fun closeEditor() {
-        if (!state.editing || state.screenIsBusy) {
+    fun closeSettings() {
+        if (!state.settingsOpen || state.screenIsBusy) {
             return
         }
 
@@ -176,6 +183,8 @@ class ProfileViewModel @Inject constructor(
     private fun loadProfile() {
         state = state.copy(
             loading = LoadingState.InProgress,
+            submitEmailStatus = LoadingState.NotStarted,
+            submitPasswordStatus = LoadingState.NotStarted,
         )
 
         refreshJob?.cancel()
@@ -209,7 +218,7 @@ class ProfileViewModel @Inject constructor(
     }
 
     /**
-     * Changes the backing data for the email field on the profile editor.
+     * Changes the backing data for the email field on the profile settings.
      */
     fun setEmail(email: String) {
         if (state.screenIsBusy) {
@@ -228,7 +237,7 @@ class ProfileViewModel @Inject constructor(
     }
 
     /**
-     * Changes the backing data for the password field on the profile editor.
+     * Changes the backing data for the password field on the profile settings.
      */
     fun setPassword(password: String) {
         if (state.screenIsBusy) {
@@ -248,7 +257,7 @@ class ProfileViewModel @Inject constructor(
     }
 
     /**
-     * Submits email changes when on the profile editor.
+     * Submits email changes when on the profile settings.
      */
     fun submitEmail() {
         if (state.screenIsBusy) {

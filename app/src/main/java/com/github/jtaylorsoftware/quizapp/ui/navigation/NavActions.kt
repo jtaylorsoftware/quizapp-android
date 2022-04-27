@@ -1,11 +1,11 @@
 package com.github.jtaylorsoftware.quizapp.ui.navigation
 
 import androidx.compose.runtime.*
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import com.github.jtaylorsoftware.quizapp.auth.AuthenticationState
 import com.github.jtaylorsoftware.quizapp.auth.AuthenticationStateSource
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
-import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -13,26 +13,26 @@ import kotlinx.coroutines.flow.map
 /**
  * Models navigation actions for the app, making it easier to navigate to
  * the correct route paths while passing their expected arguments.
+ *
+ * This only provides methods where there are expectations about the current
+ * navigation state which must be met before navigation, or when navigation
+ * must be performed in a specific way every time.
  */
-interface Navigator {
-    val state: NavigatorState
-
+interface NavActions {
     /**
      * Navigates to the login screen.
      */
     fun navigateToLogIn()
 
     /**
-     * Exits the app when back button is pressed and on login screen.
-     *
-     * @param finish Function that can be called to exit the app.
-     */
-    fun onLoginBackPressed(finish: () -> Unit)
-
-    /**
      * Navigates to the sign-up screen.
      */
     fun navigateToSignUp()
+
+    /**
+     * Pops the auth flow off the backstack.
+     */
+    fun popLoginFlow()
 
     /**
      * Navigates to the logged-in user's profile.
@@ -100,10 +100,9 @@ interface Navigator {
     fun navigateToQuizResultDetail(quizId: ObjectId, userId: ObjectId)
 
     /**
-     * Pops the current screen off the top of the backstack but will finish the activity
-     * if navigated from a deep link.
+     * Gets the parent [NavBackStackEntry] with the given route.
      */
-    fun navigateUp()
+    fun getBackStackEntry(route: String): NavBackStackEntry
 
     companion object {
         /**
@@ -114,78 +113,57 @@ interface Navigator {
 }
 
 /**
- * Models cross-cutting navigation-related concerns at the top-level of the application, including
- * authentication status and the current route.
- *
- * This can be passed down for screens to consume and produce navigation events, such as
- * redirection when authentication is required.
- */
-data class NavigatorState(val currentRoute: String)
-
-/**
- * Creates a [MutableState] of [NavigatorState].
- */
-fun mutableNavigatorState(
-    currentRoute: String = Navigator.START_DESTINATION
-): MutableState<NavigatorState> = mutableStateOf(NavigatorState(currentRoute))
-
-/**
- * Creates and remembers a [Navigator]. This uses [navController] as a key to [remember],
- * so a new [Navigator] will be created when [navController] changes. However, it reuses
- * the [initialState].
- *
- * @param initialState The initial state to create the [Navigator] with.
+ * Creates and remembers a [NavActions]. This uses [navController] as a key to [remember],
+ * so a new [NavActions] will be created when [navController] changes.
  */
 @Composable
-fun rememberNavigator(
+fun rememberNavActions(
     navController: NavHostController,
-    initialState: MutableState<NavigatorState> = mutableNavigatorState()
-): Navigator =
+): NavActions =
     remember(navController) {
-        NavigatorImpl(navController, initialState)
+        NavActionsImpl(navController)
     }
 
 /**
- * Main [Navigator] for the app.
+ * Main [NavActions] for the app.
  */
-private class NavigatorImpl(
+private class NavActionsImpl(
     private val navController: NavHostController,
-    initialState: MutableState<NavigatorState> = mutableNavigatorState()
-) : Navigator {
-    private var _state by initialState
-    override val state: NavigatorState
-        get() = _state
-
-    init {
-        navController.addOnDestinationChangedListener { _, destination, _ ->
-            _state = _state.copy(currentRoute = requireNotNull(destination.route) {
-                "navController destination.route was null"
-            })
-        }
-    }
+) : NavActions {
+    private val screen: Screen?
+        get() = screens[navController.currentDestination?.route]
 
     override fun navigateToLogIn() {
+        if (screen in authScreens) {
+            // Do not navigate to LogIn if already in the Auth flow (either LogIn or SignUp)
+            return
+        }
+
         navController.navigate(Screens.LogIn.route) {
-//            popUpTo(Screens.LogIn.route)
+            // Screens.LogIn is the start of the Auth flow
+            popUpTo(Screens.LogIn.route) {
+                inclusive = true
+            }
             launchSingleTop = true
         }
-    }
-
-    override fun onLoginBackPressed(finish: () -> Unit) {
-        check(state.currentRoute == Screens.LogIn.route) {
-            "Can only call onLoginBackPressed from LogIn"
-        }
-        finish()
     }
 
     override fun navigateToSignUp() {
-        check(state.currentRoute == Screens.LogIn.route) {
+        check(screen == Screens.LogIn) {
             "Can only navigate to SignUp from LogIn"
         }
         navController.navigate(Screens.SignUp.route) {
-//            popUpTo(Screens.LogIn.route)
+            popUpTo(Screens.LogIn.route)
             launchSingleTop = true
         }
+    }
+
+    override fun popLoginFlow() {
+        if (screen !in authScreens) {
+            // Do not navigate to if not in Auth flow
+            return
+        }
+        navController.popBackStack(Screens.LogIn.route, inclusive = true)
     }
 
     override fun navigateToProfile() {
@@ -193,9 +171,7 @@ private class NavigatorImpl(
             // Pop until the /users root
             popUpTo(Screens.Users.baseRoute) {
                 // Only save state if it's a route in bottom navigation options (a profile route)
-                navController.currentDestination?.route?.let { currentRoute ->
-                    saveState = currentRoute in bottomNavRoutes
-                }
+                saveState = screen in bottomNavDestinations
             }
             launchSingleTop = true
             restoreState = true
@@ -203,13 +179,11 @@ private class NavigatorImpl(
     }
 
     override fun navigateToProfileQuizzes() {
-        navController.navigate(Screens.Users.Quizzes.buildPath("me")) {
+        navController.navigate(Screens.Users.Quizzes.List.buildPath("me")) {
             // Pop until the /users root
             popUpTo(Screens.Users.baseRoute) {
                 // Only save state if it's a route in bottom navigation options (a profile route)
-                navController.currentDestination?.route?.let { currentRoute ->
-                    saveState = currentRoute in bottomNavRoutes
-                }
+                saveState = screen in bottomNavDestinations
             }
             launchSingleTop = true
             restoreState = true
@@ -221,9 +195,7 @@ private class NavigatorImpl(
             // Pop until the /users root
             popUpTo(Screens.Users.baseRoute) {
                 // Only save state if it's a route in bottom navigation options (a profile route)
-                navController.currentDestination?.route?.let { currentRoute ->
-                    saveState = currentRoute in bottomNavRoutes
-                }
+                saveState = screen in bottomNavDestinations
             }
             launchSingleTop = true
             restoreState = true
@@ -237,7 +209,7 @@ private class NavigatorImpl(
     }
 
     override fun navigateToUserQuizzes(userId: ObjectId) {
-        navController.navigate(Screens.Users.Quizzes.buildPath(userId.value)) {
+        navController.navigate(Screens.Users.Quizzes.List.buildPath(userId.value)) {
             launchSingleTop = true
         }
     }
@@ -250,11 +222,11 @@ private class NavigatorImpl(
 
     override fun navigateToEditor(quizId: ObjectId?) {
         if (quizId == null) {
-            navController.navigate(Screens.Quizzes.Create.route) {
+            navController.navigate(Screens.Users.Quizzes.Create.route) {
                 launchSingleTop = true
             }
         } else {
-            navController.navigate(Screens.Quizzes.Edit.buildPath(quizId.value)) {
+            navController.navigate(Screens.Users.Quizzes.Edit.buildPath(quizId.value)) {
                 launchSingleTop = true
             }
         }
@@ -278,32 +250,36 @@ private class NavigatorImpl(
         }
     }
 
-    override fun navigateUp() {
-        navController.navigateUp()
+    override fun getBackStackEntry(route: String): NavBackStackEntry {
+        return navController.getBackStackEntry(route)
     }
 }
 
 /**
- * Installs a [Composable] that will use this [Navigator] to navigate based on
- * [authenticationStateSource].
+ * Handles calling navigation actions when [authenticationStateSource]'s current [AuthenticationState]
+ * changes.
  */
-@OptIn(InternalCoroutinesApi::class)
 @Composable
-fun Navigator.AuthHandler(authenticationStateSource: AuthenticationStateSource) {
+fun AuthRouter(
+    authenticationStateSource: AuthenticationStateSource,
+    onRequireAuthentication: () -> Unit,
+    onAuthenticated: () -> Unit,
+) {
+    val currentOnAuthenticated by rememberUpdatedState(onAuthenticated)
+    val currentOnRequireAuthentication by rememberUpdatedState(onRequireAuthentication)
+
     LaunchedEffect(authenticationStateSource) {
         snapshotFlow { authenticationStateSource.state }
             .map { it is AuthenticationState.RequireAuthentication }
             .distinctUntilChanged()
             .collect { requireAuthentication ->
                 if (requireAuthentication) {
-                    if (state.currentRoute != Screens.LogIn.route) {
-                        navigateToLogIn()
-                    }
+                    currentOnRequireAuthentication()
                 } else {
-                    if (state.currentRoute == Screens.LogIn.route) {
-                        navigateUp()
-                    }
+                    currentOnAuthenticated()
                 }
             }
     }
 }
+
+private val authScreens = setOf(Screens.LogIn, Screens.SignUp)

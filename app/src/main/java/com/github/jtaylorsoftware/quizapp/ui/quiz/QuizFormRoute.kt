@@ -1,8 +1,14 @@
 package com.github.jtaylorsoftware.quizapp.ui.quiz
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.ScaffoldState
 import androidx.compose.material.Text
+import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import com.github.jtaylorsoftware.quizapp.ui.components.ErrorScreen
 import com.github.jtaylorsoftware.quizapp.ui.components.LoadingScreen
@@ -18,12 +24,19 @@ import com.github.jtaylorsoftware.quizapp.ui.components.Redirect
 fun QuizFormRoute(
     viewModel: QuizFormViewModel,
     onUploaded: () -> Unit,
+    onBackPressed: () -> Unit,
+    scaffoldState: ScaffoldState,
+    maxWidthDp: Dp,
 ) {
     QuizFormRoute(
         uiState = viewModel.uiState,
         onSubmit = viewModel::uploadResponses,
-        onUploaded = onUploaded
+        onUploaded = onUploaded,
+        scaffoldState = scaffoldState,
+        maxWidthDp = maxWidthDp,
     )
+
+    BackHandler(onBack = onBackPressed)
 }
 
 @Composable
@@ -31,7 +44,8 @@ fun QuizFormRoute(
     uiState: QuizFormUiState,
     onSubmit: () -> Unit,
     onUploaded: () -> Unit,
-) {
+    scaffoldState: ScaffoldState = rememberScaffoldState(),
+    maxWidthDp: Dp = LocalConfiguration.current.screenWidthDp.dp,) {
     when(uiState) {
         is QuizFormUiState.NoQuiz -> {
             NoQuizScreen(uiState)
@@ -43,9 +57,10 @@ fun QuizFormRoute(
                 }
             } else {
                 QuizFormScreen(
-                    quiz = uiState.quiz,
-                    responses = uiState.responses,
-                    onSubmit = onSubmit
+                    uiState,
+                    onSubmit = onSubmit,
+                    scaffoldState = scaffoldState,
+                    maxWidthDp = maxWidthDp
                 )
             }
         }

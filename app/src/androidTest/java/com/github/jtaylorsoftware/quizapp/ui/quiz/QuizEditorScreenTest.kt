@@ -3,6 +3,7 @@ package com.github.jtaylorsoftware.quizapp.ui.quiz
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
 import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import io.mockk.confirmVerified
@@ -56,7 +57,7 @@ class QuizEditorScreenTest {
         }
 
         val title = "My Quiz"
-        composeTestRule.onNodeWithContentDescription("Edit quiz title").performTextInput(title)
+        composeTestRule.onNodeWithText("Quiz Title").performTextInput(title)
 
         assertEquals(title, quizState.title.text)
     }
@@ -78,7 +79,7 @@ class QuizEditorScreenTest {
         }
 
         val title = "My Quiz"
-        composeTestRule.onNodeWithContentDescription("Edit quiz title").performTextInput(title)
+        composeTestRule.onNodeWithText("Quiz Title").performTextInput(title)
 
         assertEquals(title, quizState.title.text)
     }
@@ -99,7 +100,7 @@ class QuizEditorScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Edit allowed users").assertDoesNotExist()
+        composeTestRule.onNodeWithContentDescription("Allowed Users").assertDoesNotExist()
     }
 
     @Test
@@ -118,7 +119,7 @@ class QuizEditorScreenTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Edit allowed users").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Allowed Users").assertDoesNotExist()
     }
 
     @Test
@@ -138,11 +139,10 @@ class QuizEditorScreenTest {
         }
 
         // Uncheck/switch off isPublic (set/on by default)
-        composeTestRule.onNodeWithContentDescription("Toggle public quiz").performClick()
+        composeTestRule.onNodeWithText("Public Quiz").performClick()
 
         val allowedUsers = "username123"
-        composeTestRule.onNodeWithContentDescription("Edit allowed users")
-            .performTextInput(allowedUsers)
+        composeTestRule.onNodeWithText("Allowed Users").performTextInput(allowedUsers)
 
         assertEquals(allowedUsers, quizState.allowedUsers)
     }
@@ -164,11 +164,10 @@ class QuizEditorScreenTest {
         }
 
         // Uncheck/switch off isPublic (set/on by default)
-        composeTestRule.onNodeWithContentDescription("Toggle public quiz").performClick()
+        composeTestRule.onNodeWithText("Public Quiz").performClick()
 
         val allowedUsers = "username123"
-        composeTestRule.onNodeWithContentDescription("Edit allowed users")
-            .performTextInput(allowedUsers)
+        composeTestRule.onNodeWithText("Allowed Users").performTextInput(allowedUsers)
 
         assertEquals(allowedUsers, quizState.allowedUsers)
     }
@@ -190,10 +189,8 @@ class QuizEditorScreenTest {
         }
 
         // Verify it exists and can be clicked
-        composeTestRule.onNodeWithContentDescription("Change expiration date")
-            .assertHasClickAction()
-        composeTestRule.onNodeWithContentDescription("Change expiration time")
-            .assertHasClickAction()
+        composeTestRule.onNodeWithText("Date:").assertHasClickAction()
+        composeTestRule.onNodeWithText("Time:").assertHasClickAction()
     }
 
     @Test
@@ -213,10 +210,8 @@ class QuizEditorScreenTest {
         }
 
         // Verify it exists and can be clicked
-        composeTestRule.onNodeWithContentDescription("Change expiration date")
-            .assertHasClickAction()
-        composeTestRule.onNodeWithContentDescription("Change expiration time")
-            .assertHasClickAction()
+        composeTestRule.onNodeWithText("Date:").assertHasClickAction()
+        composeTestRule.onNodeWithText("Time:").assertHasClickAction()
     }
 
     @Test
@@ -236,16 +231,16 @@ class QuizEditorScreenTest {
         }
 
         // Click FAB, adding question (which will be Empty type)
-        composeTestRule.onNodeWithContentDescription("Add question").performClick()
+        composeTestRule.onNodeWithText("Add question").performClick()
 
         // Should have indicator for question index "Question 1:"
         composeTestRule.onNodeWithText("Question 1:")
 
         // Check for type options in added question
         // (a group of IconButtons where one can be selected at a time, like a radio group)
-        composeTestRule.onNodeWithContentDescription("Multiple choice question")
+        composeTestRule.onNodeWithContentDescription("Multiple choice")
             .assertHasClickAction()
-        composeTestRule.onNodeWithContentDescription("Fill in the blank question")
+        composeTestRule.onNodeWithContentDescription("Fill in the blank")
             .assertHasClickAction()
     }
 
@@ -285,8 +280,8 @@ class QuizEditorScreenTest {
         }
 
         // Click FAB twice, adding two Empty questions
-        composeTestRule.onNodeWithContentDescription("Add question").performClick()
-        composeTestRule.onNodeWithContentDescription("Add question").performClick()
+        composeTestRule.onNodeWithText("Add question").performClick()
+        composeTestRule.onNodeWithText("Add question").performClick()
     }
 
     @Test
@@ -306,7 +301,7 @@ class QuizEditorScreenTest {
         }
 
         // No FAB = no adding
-        composeTestRule.onNodeWithContentDescription("Add question").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Add question").assertDoesNotExist()
 
         assertThat(
             quizState.questions,
@@ -331,7 +326,7 @@ class QuizEditorScreenTest {
         }
 
         // Add question
-        composeTestRule.onNodeWithContentDescription("Add question").performClick()
+        composeTestRule.onNodeWithText("Add question").performClick()
         assertThat(
             quizState.questions,
             hasSize(1)
@@ -341,9 +336,9 @@ class QuizEditorScreenTest {
         // how editing questions works)
 
         // First select MC
-        composeTestRule.onNodeWithContentDescription("Multiple choice question").performClick()
-        composeTestRule.onNodeWithContentDescription("Multiple choice question").assertIsSelected()
-        composeTestRule.onNodeWithContentDescription("Fill in the blank question")
+        composeTestRule.onNodeWithContentDescription("Multiple choice").performClick()
+        composeTestRule.onNodeWithContentDescription("Multiple choice").assertIsSelected()
+        composeTestRule.onNodeWithContentDescription("Fill in the blank")
             .assertIsNotSelected()
 
         assertThat(
@@ -352,11 +347,14 @@ class QuizEditorScreenTest {
         )
 
         // Then select FillIn
-        composeTestRule.onNodeWithContentDescription("Fill in the blank question").performClick()
-        composeTestRule.onNodeWithContentDescription("Fill in the blank question")
-            .assertIsSelected()
-        composeTestRule.onNodeWithContentDescription("Multiple choice question")
-            .assertIsNotSelected()
+        composeTestRule.onNodeWithContentDescription("Fill in the blank").performClick()
+
+        // Should show a dialog asking to confirm the change first
+        composeTestRule.onNodeWithText("Change question type?").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Confirm").performClick()
+
+        composeTestRule.onNodeWithContentDescription("Fill in the blank").assertIsSelected()
+        composeTestRule.onNodeWithContentDescription("Multiple choice").assertIsNotSelected()
 
         assertThat(
             quizState.questions[0],
@@ -381,8 +379,8 @@ class QuizEditorScreenTest {
         }
 
         // Add MC Question
-        composeTestRule.onNodeWithContentDescription("Add question").performClick()
-        composeTestRule.onNodeWithContentDescription("Multiple choice question").performClick()
+        composeTestRule.onNodeWithText("Add question").performClick()
+        composeTestRule.onNodeWithContentDescription("Multiple choice").performClick()
 
         // Should hint for correct answer
         composeTestRule.onNodeWithText("Tap an answer", substring = true).assertIsDisplayed()
@@ -405,8 +403,7 @@ class QuizEditorScreenTest {
             `is`(0)
         )
 
-        composeTestRule.onNodeWithContentDescription("Edit answer 1 text")
-            .performTextInput("answer")
+        composeTestRule.onNodeWithText("Answer text").performTextInput("answer")
         composeTestRule.waitForIdle()
 
         assertThat(
@@ -415,9 +412,14 @@ class QuizEditorScreenTest {
         )
 
         // Hide keyboard to ensure delete button is on screen & clickable
-        composeTestRule.onNodeWithContentDescription("Edit answer 1 text").performImeAction()
+        composeTestRule.onNodeWithText("Answer text").performImeAction()
 
         composeTestRule.onNodeWithContentDescription("Delete answer 1").performClick()
+
+        // Should show dialog
+        composeTestRule.onNodeWithText("Delete answer", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete").performClick()
+
         composeTestRule.waitForIdle()
 
         assertThat(
@@ -442,12 +444,12 @@ class QuizEditorScreenTest {
             )
         }
         // Add FillIn
-        composeTestRule.onNodeWithContentDescription("Add question").performClick()
-        composeTestRule.onNodeWithContentDescription("Fill in the blank question").performClick()
+        composeTestRule.onNodeWithText("Add question").performClick()
+        composeTestRule.onNodeWithContentDescription("Fill in the blank").performClick()
 
         // Change answer
         val answer = "The correct answer"
-        composeTestRule.onNodeWithContentDescription("Change correct answer", substring = true)
+        composeTestRule.onNodeWithText("Correct answer", substring = true)
             .performTextInput(answer)
         composeTestRule.waitForIdle()
 
@@ -484,7 +486,7 @@ class QuizEditorScreenTest {
         }
 
         // Can't add answers
-        composeTestRule.onNodeWithContentDescription("Add question").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Add question").assertDoesNotExist()
 
         // Can't delete answers
         composeTestRule.onNodeWithContentDescription("Delete answer 1").assertDoesNotExist()
@@ -569,7 +571,14 @@ class QuizEditorScreenTest {
         }
 
         // Remove answer text 3, which is currently selected
+        composeTestRule.onNodeWithText("Question 1:").performTouchInput {
+            swipeUp(endY = top - 200.dp.toPx())
+        }
         composeTestRule.onNodeWithContentDescription("Delete answer 3").performClick()
+
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Delete answer", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete").performClick()
 
         // Should now be one less
         assertEquals(
@@ -580,6 +589,10 @@ class QuizEditorScreenTest {
         // Now remove answer text 2
         composeTestRule.onNodeWithContentDescription("Delete answer 2").performClick()
 
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Delete answer", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete").performClick()
+
         // Should now be 0
         assertEquals(
             0,
@@ -588,6 +601,10 @@ class QuizEditorScreenTest {
 
         // Remove the last answer
         composeTestRule.onNodeWithContentDescription("Delete answer 1").performClick()
+
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Delete answer", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete").performClick()
 
         // Should not go negative
         assertEquals(
@@ -624,8 +641,16 @@ class QuizEditorScreenTest {
             )
         }
 
+        composeTestRule.onNodeWithText("Question 1:").performTouchInput {
+            swipeUp(endY = top - 200.dp.toPx())
+        }
+
         // Remove answer text 2, which is currently selected
         composeTestRule.onNodeWithContentDescription("Delete answer 2").performClick()
+
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Delete answer", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete").performClick()
 
         // Should now be one less
         assertEquals(
@@ -645,6 +670,10 @@ class QuizEditorScreenTest {
         // Now remove answer 2 (index 1)
         composeTestRule.onNodeWithContentDescription("Delete answer 2").performClick()
 
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Delete answer", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete").performClick()
+
         // Should now be 0
         assertEquals(
             0,
@@ -653,6 +682,10 @@ class QuizEditorScreenTest {
 
         // Remove last answer
         composeTestRule.onNodeWithContentDescription("Delete answer 1").performClick()
+
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Delete answer", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete").performClick()
 
         // Should not go negative
         assertEquals(
@@ -719,10 +752,10 @@ class QuizEditorScreenTest {
         }
 
 
-        // Should not exist
-        composeTestRule.onNodeWithContentDescription("Multiple choice question")
+        // Should not be able to change type
+        composeTestRule.onNodeWithContentDescription("Multiple choice")
             .assertDoesNotExist()
-        composeTestRule.onNodeWithContentDescription("Fill in the blank question")
+        composeTestRule.onNodeWithContentDescription("Fill in the blank")
             .assertDoesNotExist()
     }
 
@@ -781,6 +814,10 @@ class QuizEditorScreenTest {
 
         composeTestRule.onNodeWithContentDescription("Delete question").performClick()
 
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Delete question", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete").performClick()
+
         assertThat(quizState.questions, hasSize(0))
     }
 
@@ -833,6 +870,10 @@ class QuizEditorScreenTest {
 
         composeTestRule.onNodeWithContentDescription("Upload quiz").performClick()
 
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Upload quiz", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Upload").performClick()
+
         verify(exactly = 1) { onSubmit() }
         confirmVerified(onSubmit)
     }
@@ -856,6 +897,10 @@ class QuizEditorScreenTest {
         }
 
         composeTestRule.onNodeWithContentDescription("Upload quiz").performClick()
+
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Upload quiz", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Upload").performClick()
 
         verify(exactly = 1) { onSubmit() }
         confirmVerified(onSubmit)

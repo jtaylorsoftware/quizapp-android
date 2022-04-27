@@ -1,4 +1,4 @@
-package com.github.jtaylorsoftware.quizapp.ui.signup
+package com.github.jtaylorsoftware.quizapp.ui.signinsignup
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -37,11 +37,10 @@ class SignupScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Username").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Password").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Confirm password").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Username").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Password").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Confirm password").assertIsDisplayed()
         composeTestRule.onNodeWithText("Sign Up").assertHasClickAction()
-        composeTestRule.onNodeWithText("Already registered?").assertIsDisplayed()
         composeTestRule.onNodeWithText("Sign In").assertHasClickAction()
     }
 
@@ -82,10 +81,10 @@ class SignupScreenTest {
         val inputPass = "password"
         val inputEmail = "email@example.com"
 
-        composeTestRule.onNodeWithContentDescription("Username").performTextInput(inputUser)
-        composeTestRule.onNodeWithContentDescription("Email").performTextInput(inputEmail)
-        composeTestRule.onNodeWithContentDescription("Password").performTextInput(inputPass)
-        composeTestRule.onNodeWithContentDescription("Confirm password").performTextInput(inputPass)
+        composeTestRule.onNodeWithText("Username").performTextInput(inputUser)
+        composeTestRule.onNodeWithText("Email").performTextInput(inputEmail)
+        composeTestRule.onNodeWithText("Password").performTextInput(inputPass)
+        composeTestRule.onNodeWithText("Confirm password").performTextInput(inputPass)
 
         assertEquals(inputUser, user.captured)
         assertEquals(inputPass, pass.captured)
@@ -180,8 +179,7 @@ class SignupScreenTest {
 
         composeTestRule.onNodeWithText("Username taken").assertIsDisplayed()
         composeTestRule.onNodeWithText("Password error").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Confirm password")
-            .performTextInput("mismatch")
+        composeTestRule.onNodeWithText("Confirm password").performTextInput("mismatch")
         composeTestRule.onNodeWithText("Passwords do not match.").assertIsDisplayed()
     }
 

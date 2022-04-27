@@ -6,27 +6,31 @@ import androidx.compose.material.ScaffoldState
 import androidx.compose.material.Text
 import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import com.github.jtaylorsoftware.quizapp.ui.components.*
 import com.github.jtaylorsoftware.quizapp.ui.rememberIsRefreshing
 
+/**
+ * Controls rendering of the [QuizResultDetailScreen].
+ */
 @Composable
 fun QuizResultDetailRoute(
-    viewModel: QuizResultDetailViewModel
+    viewModel: QuizResultDetailViewModel,
+    scaffoldState: ScaffoldState,
+    maxWidthDp: Dp,
 ) {
     val isRefreshing = rememberIsRefreshing(viewModel)
-
-    LaunchedEffect(viewModel) {
-        viewModel.refresh()
-    }
 
     QuizResultDetailRoute(
         uiState = viewModel.uiState,
         isRefreshing = isRefreshing,
-        onRefresh = viewModel::refresh
+        onRefresh = viewModel::refresh,
+        scaffoldState = scaffoldState,
+        maxWidthDp = maxWidthDp,
     )
 }
 
@@ -36,10 +40,10 @@ fun QuizResultDetailRoute(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     scaffoldState: ScaffoldState = rememberScaffoldState(),
+    maxWidthDp: Dp = LocalConfiguration.current.screenWidthDp.dp,
 ) {
     AppScaffold(
         scaffoldState = scaffoldState,
-        uiState = uiState,
     ) {
         AppSwipeRefresh(isRefreshing = isRefreshing, onRefresh = onRefresh) {
             when (uiState) {
@@ -47,9 +51,10 @@ fun QuizResultDetailRoute(
                     NoQuizResultScreen(uiState)
                 }
                 is QuizResultDetailUiState.QuizResultDetail -> {
-                    ResultDetail(
+                    QuizResultDetailScreen(
                         uiState.quizResult,
-                        uiState.quizForm
+                        uiState.quizForm,
+                        maxWidthDp = maxWidthDp
                     )
                 }
             }

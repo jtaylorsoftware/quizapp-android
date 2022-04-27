@@ -2,6 +2,7 @@ package com.github.jtaylorsoftware.quizapp.ui
 
 import androidx.compose.material.SnackbarHostState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import com.github.jtaylorsoftware.quizapp.data.domain.FailureReason
 import com.github.jtaylorsoftware.quizapp.data.domain.SuccessStrings
 import kotlinx.coroutines.flow.*
@@ -95,7 +96,7 @@ interface UiStateSource {
  */
 @Composable
 fun rememberIsRefreshing(uiStateSource: UiStateSource): Boolean {
-    var isRefreshing by remember { mutableStateOf(false) }
+    var isRefreshing by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(uiStateSource) {
         snapshotFlow { uiStateSource.uiState }
             .filter { it.loading !is LoadingState.NotStarted } // Ignore any "NotStarted" state on first render

@@ -2,7 +2,6 @@ package com.github.jtaylorsoftware.quizapp.ui.components
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTextInput
 import io.mockk.confirmVerified
@@ -21,35 +20,31 @@ class UsernameFieldTest {
     fun displaysGivenText() {
         val state = TextFieldState(text = "Hello World")
         composeTestRule.setContent {
-            UsernameField(state, {}, fieldContentDescription = "Enter username", hint = "Hint", hintContentDescription = "Username hint")
+            UsernameField(state, {})
         }
 
+        composeTestRule.onNodeWithText("Username").assertIsDisplayed()
         composeTestRule.onNodeWithText(state.text).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Hint").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Enter username").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Username hint").assertIsDisplayed()
     }
 
     @Test
     fun whenNotDirty_DoesNotDisplayError() {
         val state = TextFieldState(text = "Hello World", error = "Bad Input", dirty = false)
         composeTestRule.setContent {
-            UsernameField(state, {}, hint = "Hint")
+            UsernameField(state, {})
         }
 
         composeTestRule.onNodeWithText(state.error!!).assertDoesNotExist()
-        composeTestRule.onNodeWithText("Hint").assertIsDisplayed()
     }
 
     @Test
     fun whenGivenErrorState_DisplaysErrorText() {
         val state = TextFieldState(text = "", error = "Bad input", dirty = true)
         composeTestRule.setContent {
-            UsernameField(state, {}, hint = "Hint")
+            UsernameField(state, {})
         }
 
         composeTestRule.onNodeWithText(state.error!!).assertIsDisplayed()
-        composeTestRule.onNodeWithText("Hint").assertDoesNotExist()
     }
 
     @Test
@@ -60,12 +55,12 @@ class UsernameFieldTest {
         every { onChange(any()) } returns Unit
 
         composeTestRule.setContent {
-            UsernameField(state, onChange, hint = "Hint")
+            UsernameField(state, onChange)
         }
 
         val expectedText = "mylogin"
 
-        composeTestRule.onNodeWithContentDescription("Username").performTextInput(expectedText)
+        composeTestRule.onNodeWithText("Username").performTextInput(expectedText)
 
         verify { onChange(expectedText) }
         confirmVerified(onChange)

@@ -13,48 +13,29 @@ class PasswordFieldTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun displaysGivenText() {
-        composeTestRule.setContent {
-            PasswordField(
-                TextFieldState(text = "mypassword"),
-                {},
-                fieldContentDescription = "Password",
-                hint = "Hint",
-                hintContentDescription = "Password hint"
-            )
-        }
-
-        composeTestRule.onNodeWithContentDescription("Password").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Password hint").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Hint").assertIsDisplayed()
-    }
-
-    @Test
     fun whenNotDirtyWithErrors_doesNotShowError() {
+        val state = TextFieldState(text = "mypassword", error = "Password too short", dirty = false)
         composeTestRule.setContent {
             PasswordField(
-                TextFieldState(text = "mypassword", error = "Password too short", dirty = false),
-                {},
-                hint = "Hint"
+                state,
+                {}
             )
         }
 
-        composeTestRule.onNodeWithText("Hint").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Password too short").assertDoesNotExist()
+        composeTestRule.onNodeWithText(state.error!!).assertDoesNotExist()
     }
 
     @Test
-    fun whenDirtyWithErrors_showsError() {
+    fun whenDirtyWithError_showsError() {
+        val state = TextFieldState(text = "mypassword", error = "Password too short", dirty = true)
         composeTestRule.setContent {
             PasswordField(
-                TextFieldState(text = "mypassword", error = "Password too short", dirty = true),
-                {},
-                hint = "Hint"
+                state,
+                {}
             )
         }
 
-        composeTestRule.onNodeWithText("Hint").assertDoesNotExist()
-        composeTestRule.onNodeWithText("Password too short").assertIsDisplayed()
+        composeTestRule.onNodeWithText(state.error!!).assertIsDisplayed()
     }
 
     @Test
@@ -62,7 +43,7 @@ class PasswordFieldTest {
         val password = "mypassword"
 
         composeTestRule.setContent {
-            PasswordField(TextFieldState(text = password), {}, hint = "Hint")
+            PasswordField(TextFieldState(text = password), {})
         }
 
         // By default the password is not displayed
@@ -88,11 +69,11 @@ class PasswordFieldTest {
         every { onChange(capture(password)) } returns Unit
 
         composeTestRule.setContent {
-            PasswordField(TextFieldState(text = ""), onChange, hint = "Hint")
+            PasswordField(TextFieldState(text = ""), onChange)
         }
 
         val inputPassword = "myinputpassword"
-        composeTestRule.onNodeWithContentDescription("Password").performTextInput(inputPassword)
+        composeTestRule.onNodeWithText("Password").performTextInput(inputPassword)
 
         verify { onChange(any()) }
         confirmVerified(onChange)

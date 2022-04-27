@@ -220,29 +220,6 @@ class QuizEditorViewModelTest {
     }
 
     @Test
-    fun `uploadQuiz should allow original expiration if unchanged`() = runTest {
-        // Use existing quiz but modified for invalid date
-        val errorQuiz =
-            quizDto.copy(expiration = Instant.now().minus(10, ChronoUnit.DAYS).toString())
-
-        networkSource = FakeQuizNetworkSource(quizzes = listOf(errorQuiz))
-        quizRepository = FakeQuizRepository(networkSource = networkSource)
-        viewModel = QuizEditorViewModel(
-            SavedStateHandle().apply {
-                set("quiz", quizId.value)
-            }, quizRepository, Dispatchers.Main
-        )
-        advanceUntilIdle()
-
-        viewModel.uploadQuiz()
-        advanceUntilIdle()
-        assertThat(
-            viewModel.runAsQuizState { expirationError },
-            `is`(nullValue())
-        )
-    }
-
-    @Test
     fun `uploadQuiz should require at least one question and not submit when errors`() = runTest {
         // use fresh quiz with no questions
         viewModel.uploadQuiz()

@@ -1,8 +1,14 @@
 package com.github.jtaylorsoftware.quizapp.ui.quiz
 
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.ScaffoldState
 import androidx.compose.material.Text
+import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import com.github.jtaylorsoftware.quizapp.ui.components.ErrorScreen
 import com.github.jtaylorsoftware.quizapp.ui.components.LoadingScreen
@@ -18,11 +24,15 @@ import com.github.jtaylorsoftware.quizapp.ui.components.Redirect
 fun QuizEditorRoute(
     viewModel: QuizEditorViewModel,
     onUploaded: () -> Unit,
+    scaffoldState: ScaffoldState,
+    maxWidthDp: Dp,
 ) {
     QuizEditorRoute(
         uiState = viewModel.uiState,
         onSubmit = viewModel::uploadQuiz,
         onUploaded = onUploaded,
+        scaffoldState = scaffoldState,
+        maxWidthDp = maxWidthDp,
     )
 }
 
@@ -31,7 +41,8 @@ fun QuizEditorRoute(
     uiState: QuizEditorUiState,
     onSubmit: () -> Unit,
     onUploaded: () -> Unit,
-) {
+    scaffoldState: ScaffoldState = rememberScaffoldState(),
+    maxWidthDp: Dp = LocalConfiguration.current.screenWidthDp.dp,) {
     when (uiState) {
         is QuizEditorUiState.NoQuiz -> {
             NoQuizScreen(uiState)
@@ -39,12 +50,17 @@ fun QuizEditorRoute(
         is QuizEditorUiState.Editor -> {
             if (uiState.uploadStatus is LoadingState.Success) {
                 Redirect(navigate = onUploaded) {
-                    Text("Quiz created, returning to profile")
+                    Text(
+                        "Quiz uploaded, returning to profile",
+                        color = MaterialTheme.colors.onBackground
+                    )
                 }
             } else {
                 QuizEditorScreen(
                     uiState = uiState,
-                    onSubmit = onSubmit
+                    onSubmit = onSubmit,
+                    scaffoldState = scaffoldState,
+                    maxWidthDp = maxWidthDp
                 )
             }
         }
@@ -58,7 +74,7 @@ private fun NoQuizScreen(
     when (uiState.loading) {
         is LoadingState.NotStarted, LoadingState.InProgress -> {
             LoadingScreen {
-                Text("Loading quiz")
+                Text("Loading quiz", color = MaterialTheme.colors.onBackground)
             }
         }
         else -> {
@@ -68,7 +84,7 @@ private fun NoQuizScreen(
                 } ?: "Unable to load quiz right now"
             }
             ErrorScreen {
-                Text(errorMessage)
+                Text(errorMessage, color = MaterialTheme.colors.onBackground)
             }
         }
     }

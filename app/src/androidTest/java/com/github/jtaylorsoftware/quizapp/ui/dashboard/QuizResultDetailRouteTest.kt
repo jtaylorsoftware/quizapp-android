@@ -71,8 +71,7 @@ class QuizResultDetailRouteTest {
             }
         }
 
-        composeTestRule.onAllNodesWithText(FailureReason.UNKNOWN.value, substring = true)
-            .assertCountEquals(2)
+        composeTestRule.onNodeWithText(FailureReason.UNKNOWN.value, substring = true).assertIsDisplayed()
     }
 
     @Test

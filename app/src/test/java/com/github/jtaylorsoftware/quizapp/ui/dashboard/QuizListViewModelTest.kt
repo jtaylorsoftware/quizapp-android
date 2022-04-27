@@ -73,20 +73,6 @@ class QuizListViewModelTest {
     }
 
     @Test
-    fun `should begin with LoadingState NotStarted and NoProfile`() = runTest {
-        // Should first be Loading, before initial refresh
-        assertThat(
-            viewModel.uiState,
-            IsInstanceOf(QuizListUiState.NoQuizzes::class.java)
-        )
-
-        assertThat(
-            viewModel.uiState.loading,
-            IsInstanceOf(LoadingState.NotStarted::class.java)
-        )
-    }
-
-    @Test
     fun `refresh should set loading to InProgress and then load data`() = runTest {
         val mockUserRepository = spyk(userRepository)
         viewModel = QuizListViewModel(mockUserRepository, quizRepository)

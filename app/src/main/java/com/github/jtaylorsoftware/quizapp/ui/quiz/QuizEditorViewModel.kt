@@ -347,10 +347,11 @@ class QuizEditorViewModel @Inject constructor(
                 return
             }
 
+            val currentQuestionPrompt = _questions[index].question.prompt.text
             _questions[index] = when (newType) {
                 QuestionType.Empty -> throw IllegalArgumentException("Cannot change QuestionType to Empty")
-                QuestionType.FillIn -> FillInHolder()
-                QuestionType.MultipleChoice -> MultipleChoiceHolder()
+                QuestionType.FillIn -> FillInHolder(questionText = currentQuestionPrompt)
+                QuestionType.MultipleChoice -> MultipleChoiceHolder(questionText = currentQuestionPrompt)
             }
         }
 
@@ -403,11 +404,8 @@ class QuizEditorViewModel @Inject constructor(
         }
 
         private fun validateExpiration() {
-            // Allow only the original expiration if editing, or any future value if creating new quiz
-            expirationError = if (
-                editing && expiration != originalExpiration ||
-                !editing && expiration.isBefore(Instant.now())
-            ) {
+            // Allow only future dates
+            expirationError = if (expiration.isBefore(Instant.now())) {
                 "Expiration must be in the future."
             } else null
         }

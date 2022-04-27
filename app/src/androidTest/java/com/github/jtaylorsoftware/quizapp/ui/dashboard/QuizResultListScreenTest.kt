@@ -66,25 +66,6 @@ class QuizResultListScreenTest {
     )
 
     @Test
-    fun resultListForUser_shouldDisplayHeader() {
-        val uiState = QuizResultListUiState.ListForUser(
-            loading = LoadingState.NotStarted,
-            data = listings,
-        )
-        composeTestRule.setContent {
-            QuizAppTheme {
-                QuizResultListScreen(
-                    uiState = uiState,
-                    navigateToDetails = { _, _ -> },
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Your Quiz Results", substring = true, ignoreCase = true)
-            .assertIsDisplayed()
-    }
-
-    @Test
     fun resultListForQuiz_shouldDisplayHeader() {
         val uiState = QuizResultListUiState.ListForQuiz(
             loading = LoadingState.NotStarted,
@@ -100,9 +81,9 @@ class QuizResultListScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Results for quiz", substring = true, ignoreCase = true)
+        composeTestRule.onNodeWithText("Results for \"TESTQUIZ\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Tap a Result to view graded questions", ignoreCase = true)
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("TESTQUIZ", substring = true).assertIsDisplayed()
     }
 
     @Test
@@ -167,14 +148,16 @@ class QuizResultListScreenTest {
         val form = quizzes[0]
         composeTestRule.setContent {
             QuizAppTheme {
-                ResultDetail(result, form)
+                QuizResultDetailScreen(result, form)
             }
         }
 
         // Check header displayed
-        composeTestRule.onNodeWithText("${result.username}'s results for \"${result.quizTitle}\"")
+        composeTestRule.onNodeWithText("${result.username}'s results").assertIsDisplayed()
+        composeTestRule.onNodeWithText("for \"${result.quizTitle}\"").assertIsDisplayed()
+        composeTestRule.onNodeWithText("${"%.2f".format(result.score * 100)}%")
             .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Overall score: ${"%.2f".format(result.score * 100)}%")
+        composeTestRule.onNodeWithContentDescription("Score ${"%.2f".format(result.score * 100)}%")
             .assertIsDisplayed()
     }
 
@@ -184,13 +167,15 @@ class QuizResultListScreenTest {
         val form = quizzes[0]
         composeTestRule.setContent {
             QuizAppTheme {
-                ResultDetail(result, form)
+                QuizResultDetailScreen(result, form)
             }
         }
 
         // Check the question prompts are displayed
-        composeTestRule.onNodeWithText("1. ${form.questions[0].text}").assertIsDisplayed()
-        composeTestRule.onNodeWithText("2. ${form.questions[1].text}").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Question 1.").assertIsDisplayed()
+        composeTestRule.onNodeWithText(form.questions[0].text).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Question 2.").assertIsDisplayed()
+        composeTestRule.onNodeWithText(form.questions[1].text).assertIsDisplayed()
     }
 
     @Test
@@ -199,16 +184,18 @@ class QuizResultListScreenTest {
         val form = quizzes[0]
         composeTestRule.setContent {
             QuizAppTheme {
-                ResultDetail(result, form)
+                QuizResultDetailScreen(result, form)
             }
         }
 
         // Should display prompt
-        composeTestRule.onNodeWithText("1. ${form.questions[0].text}").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Question 1.").assertIsDisplayed()
+        composeTestRule.onNodeWithText(form.questions[0].text).assertIsDisplayed()
 
         // Should display each answer, with choice graded and correct answer indicated
         for ((index, answer) in (form.questions[0] as Question.MultipleChoice).answers.withIndex()) {
-            composeTestRule.onNodeWithText("${index + 1}. ${answer.text}").assertIsDisplayed()
+            composeTestRule.onNodeWithText("${index + 1}.").assertIsDisplayed()
+            composeTestRule.onNodeWithText(answer.text).assertIsDisplayed()
             // Only the choice and the correct answer get an icon
             if (result.answers[index].isCorrect) {
                 // Correct answer, even if not the choice gets a "Correct" icon
@@ -226,15 +213,16 @@ class QuizResultListScreenTest {
         val form = quizzes[0]
         composeTestRule.setContent {
             QuizAppTheme {
-                ResultDetail(result, form)
+                QuizResultDetailScreen(result, form)
             }
         }
 
         // Should display prompt
-        composeTestRule.onNodeWithText("1. ${form.questions[0].text}").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Question 1.").assertIsDisplayed()
+        composeTestRule.onNodeWithText(form.questions[0].text).assertIsDisplayed()
 
         // Should display the user's answer and an "Incorrect" icon
-        composeTestRule.onNodeWithText("Your answer: ${(result.answers[1] as GradedAnswer.FillIn).answer}")
+        composeTestRule.onNodeWithText((result.answers[1] as GradedAnswer.FillIn).answer)
             .assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Incorrect answer").assertIsDisplayed()
     }
@@ -245,16 +233,17 @@ class QuizResultListScreenTest {
         val form = quizzes[0]
         composeTestRule.setContent {
             QuizAppTheme {
-                ResultDetail(result, form)
+                QuizResultDetailScreen(result, form)
             }
         }
 
         // Should display prompt
-        composeTestRule.onNodeWithText("1. ${form.questions[0].text}").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Question 1.").assertIsDisplayed()
+        composeTestRule.onNodeWithText(form.questions[0].text).assertIsDisplayed()
 
         // Should display the user's answer and a "Correct" icon
         composeTestRule
-            .onNodeWithText("Your answer: ${(result.answers[1] as GradedAnswer.FillIn).answer}")
+            .onNodeWithText((result.answers[1] as GradedAnswer.FillIn).answer)
             .assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Correct answer").assertIsDisplayed()
     }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Quizappandroid" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/gray_blue_900</item>
+        <item name="android:statusBarColor">@color/gray_blue_900</item>
+        <item name="android:navigationBarColor">@color/sea_blue_700</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

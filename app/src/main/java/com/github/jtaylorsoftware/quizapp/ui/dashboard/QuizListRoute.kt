@@ -1,13 +1,15 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
 import com.github.jtaylorsoftware.quizapp.ui.LoadingState
@@ -16,16 +18,15 @@ import com.github.jtaylorsoftware.quizapp.ui.components.*
 import com.github.jtaylorsoftware.quizapp.ui.rememberIsRefreshing
 
 /**
- * Controls rendering for the quiz list screen and displays bottom navigation components
- * for the dashboard screens.
- * When the user is not logged in, this redirects to the login screen.
+ * Controls rendering for the [QuizListScreen] and displays a bottom navigation bar common
+ * to the profile/dashboard screens.
  *
  * @param viewModel The [QuizListViewModel] required for the screens.
  *
  * @param navigateToEditor Called when the user taps the "Edit" button for a Quiz, or taps the
  * FAB to create a Quiz. Receives the id of the Quiz as its argument, or null when tapping the FAB.
  *
- * @param navigateToResults Called when the user taps the "Results" button for a Quiz.
+ * @param navigateToResultsForQuiz Called when the user taps the "Results" button for a Quiz.
  * Receives the id of the Quiz as its argument.
  *
  * @param bottomNavigation The bottom navigation bar for the app.
@@ -34,14 +35,12 @@ import com.github.jtaylorsoftware.quizapp.ui.rememberIsRefreshing
 fun QuizListRoute(
     viewModel: QuizListViewModel,
     navigateToEditor: (ObjectId?) -> Unit,
-    navigateToResults: (ObjectId) -> Unit,
+    navigateToResultsForQuiz: (ObjectId) -> Unit,
     bottomNavigation: @Composable () -> Unit,
+    scaffoldState: ScaffoldState,
+    maxWidthDp: Dp,
 ) {
     val isRefreshing = rememberIsRefreshing(viewModel)
-
-    LaunchedEffect(viewModel) {
-        viewModel.refresh()
-    }
 
     QuizListRoute(
         uiState = viewModel.uiState,
@@ -49,8 +48,10 @@ fun QuizListRoute(
         onRefresh = viewModel::refresh,
         onDeleteQuiz = viewModel::deleteQuiz,
         navigateToEditor = navigateToEditor,
-        navigateToResults = navigateToResults,
-        bottomNavigation = bottomNavigation
+        navigateToResults = navigateToResultsForQuiz,
+        bottomNavigation = bottomNavigation,
+        scaffoldState = scaffoldState,
+        maxWidthDp = maxWidthDp,
     )
 }
 
@@ -71,33 +72,37 @@ fun QuizListRoute(
     navigateToResults: (ObjectId) -> Unit,
     bottomNavigation: @Composable () -> Unit = {},
     scaffoldState: ScaffoldState = rememberScaffoldState(),
+    maxWidthDp: Dp = LocalConfiguration.current.screenWidthDp.dp,
 ) {
     AppScaffold(
         modifier = Modifier.testTag("QuizListRoute"),
         scaffoldState = scaffoldState,
-        uiState = uiState,
         floatingActionButton = {
             FloatingActionButton(onClick = { navigateToEditor(null) }) {
                 Icon(Icons.Default.Add, "Create quiz")
             }
         },
         bottomBar = { bottomNavigation() }
-    ) {
+    ) { paddingValues ->
         AppSwipeRefresh(isRefreshing = isRefreshing, onRefresh = onRefresh) {
-            when (uiState) {
-                is QuizListUiState.NoQuizzes -> {
-                    NoQuizzesScreen(uiState)
-                }
-                is QuizListUiState.QuizList -> {
-                    OnSuccess(uiState.deleteQuizStatus) {
-                        onRefresh()
+            Box(Modifier.padding(paddingValues)) {
+                when (uiState) {
+                    is QuizListUiState.NoQuizzes -> {
+                        NoQuizzesScreen(uiState)
                     }
-                    QuizListScreen(
-                        uiState = uiState,
-                        onDeleteQuiz = onDeleteQuiz,
-                        navigateToEditor = navigateToEditor,
-                        navigateToResults = navigateToResults,
-                    )
+                    is QuizListUiState.QuizList -> {
+                        OnSuccess(uiState.deleteQuizStatus) {
+                            onRefresh()
+                        }
+                        QuizListScreen(
+                            uiState = uiState,
+                            onDeleteQuiz = onDeleteQuiz,
+                            navigateToEditor = navigateToEditor,
+                            navigateToResults = navigateToResults,
+                            scaffoldState = scaffoldState,
+                            maxWidthDp = maxWidthDp,
+                        )
+                    }
                 }
             }
         }

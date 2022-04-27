@@ -49,27 +49,6 @@ class QuizListScreenTest {
     )
 
     @Test
-    fun shouldDisplayHeader() {
-        val uiState = QuizListUiState.QuizList(
-            loading = LoadingState.NotStarted,
-            data = quizzes,
-            deleteQuizStatus = LoadingState.NotStarted,
-        )
-        composeTestRule.setContent {
-            QuizAppTheme {
-                QuizListScreen(
-                    uiState = uiState,
-                    onDeleteQuiz = {},
-                    navigateToEditor = {},
-                    navigateToResults = {},
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Your Quizzes").assertIsDisplayed()
-    }
-
-    @Test
     fun displaysEachQuizListing() {
         val uiState = QuizListUiState.QuizList(
             loading = LoadingState.NotStarted,
@@ -90,15 +69,17 @@ class QuizListScreenTest {
         quizzes.forEach { quiz ->
             // Listing data should display
             composeTestRule.onNodeWithText(quiz.title, substring = true).assertIsDisplayed()
-            composeTestRule.onNodeWithText("${quiz.questionCount} Question", substring = true)
+            composeTestRule.onNodeWithText("${quiz.questionCount} questions", substring = true)
                 .assertIsDisplayed()
-            composeTestRule.onNodeWithText("${quiz.resultsCount} Response", substring = true)
+            composeTestRule.onNodeWithText("${quiz.resultsCount} responses", substring = true)
                 .assertIsDisplayed()
 
             // Link text displayed
-            composeTestRule.onNodeWithText("quizzes/${quiz.id.value}", substring = true, useUnmergedTree = true).run {
+            composeTestRule.onNodeWithText("Link: quizzes/${quiz.id.value}", useUnmergedTree = true).run {
                 assertIsDisplayed()
-                assertHasClickAction()
+                performTouchInput {
+                    click(percentOffset(0.5f, 0.2f)) // Click on the clickable URL part of the text
+                }
             }
         }
     }
@@ -236,6 +217,10 @@ class QuizListScreenTest {
 
         // Press Delete button
         composeTestRule.onNodeWithContentDescription("Delete Quiz").performClick()
+
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Delete quiz", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Delete").performClick()
 
         assertEquals(quizzes[0].id, requireNotNull(quizId))
     }

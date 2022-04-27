@@ -35,110 +35,81 @@ class ProfileScreenTest {
     fun shouldDisplayContent() {
         val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
-            data = user
+            data = user,
+            settingsOpen = false
         )
         composeTestRule.setContent {
             QuizAppTheme {
                 ProfileScreen(
                     uiState = uiState,
-                    navigateToQuizScreen = {},
-                    navigateToResultScreen = {},
-                    navigateToProfileEditor = {},
+                    navigateToQuizCreator = {},
+                    navigateToQuizResults = {},
                 )
             }
         }
 
-        // Topmost ("Profile") card content
+        // User data card content
         composeTestRule.onNodeWithText("Hello, ${user.username}").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Email: ${user.email}").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Joined: ${user.date.toLocalizedString()}")
-            .assertIsDisplayed()
-        composeTestRule.onNodeWithText("Edit Profile").assertHasClickAction()
+        composeTestRule.onNodeWithText("Joined: ${user.date.toLocalizedString()}").assertIsDisplayed()
 
-        // Card showing number of quizzes created with button to view list
+        // Card showing number of quizzes created with button to create quiz
         composeTestRule.onNodeWithText("You've created $numQuizzes quizzes.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("View Quizzes").assertHasClickAction()
+        composeTestRule.onNodeWithText("Create quiz", ignoreCase = true).assertHasClickAction()
 
         // Card showing number of results with button to view list
-        composeTestRule.onNodeWithText("You have $numResults results.").assertIsDisplayed()
-        composeTestRule.onNodeWithText("View Results").assertHasClickAction()
+        composeTestRule.onNodeWithText("You've taken $numResults quizzes.").assertIsDisplayed()
+        composeTestRule.onNodeWithText("View Results", ignoreCase = true).assertHasClickAction()
     }
 
     @Test
-    fun editProfile_whenClicked_shouldDisplayProfileEditScreen() {
-        val navigateToProfileEditor = mockk<() -> Unit>()
-        every { navigateToProfileEditor() } returns Unit
+    fun createQuiz_whenClicked_shouldCallNavigateToQuizCreator() {
+        val navigateToQuizCreator = mockk<() -> Unit>()
+        every { navigateToQuizCreator() } returns Unit
 
         val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
-            data = user
+            data = user,
+            settingsOpen = false
         )
         composeTestRule.setContent {
             QuizAppTheme {
                 ProfileScreen(
                     uiState = uiState,
-                    navigateToQuizScreen = {},
-                    navigateToResultScreen = {},
-                    navigateToProfileEditor = navigateToProfileEditor,
+                    navigateToQuizCreator = navigateToQuizCreator,
+                    navigateToQuizResults = {},
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("Edit Profile").performClick()
+        composeTestRule.onNodeWithText("Create quiz", ignoreCase = true).performClick()
 
-        verify(exactly = 1) { navigateToProfileEditor() }
-        confirmVerified(navigateToProfileEditor)
-    }
-
-    @Test
-    fun viewQuizzes_whenClicked_shouldDisplayQuizScreen() {
-        val navigateToQuizScreen = mockk<() -> Unit>()
-        every { navigateToQuizScreen() } returns Unit
-
-        val uiState = ProfileUiState.Profile(
-            loading = LoadingState.NotStarted,
-            data = user
-        )
-        composeTestRule.setContent {
-            QuizAppTheme {
-                ProfileScreen(
-                    uiState = uiState,
-                    navigateToQuizScreen = navigateToQuizScreen,
-                    navigateToResultScreen = {},
-                    navigateToProfileEditor = {},
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("View Quizzes").performClick()
-
-        verify(exactly = 1) { navigateToQuizScreen() }
-        confirmVerified(navigateToQuizScreen)
+        verify(exactly = 1) { navigateToQuizCreator() }
+        confirmVerified(navigateToQuizCreator)
     }
 
     @Test
     fun viewResults_whenClicked_shouldDisplayResultScreen() {
-        val navigateToResultScreen = mockk<() -> Unit>()
-        every { navigateToResultScreen() } returns Unit
+        val navigateToQuizResults = mockk<() -> Unit>()
+        every { navigateToQuizResults() } returns Unit
 
         val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
-            data = user
+            data = user,
+            settingsOpen = false
         )
         composeTestRule.setContent {
             QuizAppTheme {
                 ProfileScreen(
                     uiState = uiState,
-                    navigateToQuizScreen = {},
-                    navigateToResultScreen = navigateToResultScreen,
-                    navigateToProfileEditor = {},
+                    navigateToQuizCreator = {},
+                    navigateToQuizResults = navigateToQuizResults,
                 )
             }
         }
 
-        composeTestRule.onNodeWithText("View Results").performClick()
+        composeTestRule.onNodeWithText("View Results", ignoreCase = true).performClick()
 
-        verify(exactly = 1) { navigateToResultScreen() }
-        confirmVerified(navigateToResultScreen)
+        verify(exactly = 1) { navigateToQuizResults() }
+        confirmVerified(navigateToQuizResults)
     }
 }

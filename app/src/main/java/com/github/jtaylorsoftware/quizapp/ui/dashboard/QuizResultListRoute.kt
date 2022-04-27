@@ -1,14 +1,16 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.ScaffoldState
 import androidx.compose.material.Text
 import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
 import com.github.jtaylorsoftware.quizapp.ui.LoadingState
@@ -16,9 +18,8 @@ import com.github.jtaylorsoftware.quizapp.ui.components.*
 import com.github.jtaylorsoftware.quizapp.ui.rememberIsRefreshing
 
 /**
- * Controls rendering for the quiz result list screen and displays bottom navigation components
- * for the dashboard screens.
- * When the user is not logged in, this redirects to the login screen.
+ * Controls rendering for the [QuizResultListScreen] and displays a bottom navigation bar common
+ * to the profile/dashboard screens.
  *
  * @param viewModel The [QuizResultListViewModel] required for the screens.
  *
@@ -32,18 +33,19 @@ fun QuizResultListRoute(
     viewModel: QuizResultListViewModel,
     navigateToDetailScreen: (ObjectId, ObjectId) -> Unit,
     bottomNavigation: @Composable () -> Unit,
+    scaffoldState: ScaffoldState,
+    maxWidthDp: Dp,
 ) {
     val isRefreshing = rememberIsRefreshing(viewModel)
-    LaunchedEffect(viewModel) {
-        viewModel.refresh()
-    }
 
     QuizResultListRoute(
         uiState = viewModel.uiState,
         navigateToDetailScreen = navigateToDetailScreen,
         isRefreshing = isRefreshing,
         onRefresh = viewModel::refresh,
-        bottomNavigation = bottomNavigation
+        bottomNavigation = bottomNavigation,
+        scaffoldState = scaffoldState,
+        maxWidthDp = maxWidthDp,
     )
 }
 
@@ -58,32 +60,36 @@ fun QuizResultListRoute(
     onRefresh: () -> Unit,
     bottomNavigation: @Composable () -> Unit = {},
     scaffoldState: ScaffoldState = rememberScaffoldState(),
+    maxWidthDp: Dp = LocalConfiguration.current.screenWidthDp.dp,
 ) {
     AppScaffold(
         modifier = Modifier.testTag("QuizResultListRoute"),
         scaffoldState = scaffoldState,
-        uiState = uiState,
         bottomBar = { bottomNavigation() }
-    ) {
+    ) { paddingValues ->
         AppSwipeRefresh(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh
         ) {
-            when (uiState) {
-                is QuizResultListUiState.NoQuizResults -> {
-                    NoQuizResultsScreen(uiState = uiState)
-                }
-                is QuizResultListUiState.ListForUser -> {
-                    QuizResultListScreen(
-                        uiState = uiState,
-                        navigateToDetails = navigateToDetailScreen,
-                    )
-                }
-                is QuizResultListUiState.ListForQuiz -> {
-                    QuizResultListScreen(
-                        uiState = uiState,
-                        navigateToDetails = navigateToDetailScreen,
-                    )
+            Box(Modifier.padding(paddingValues)) {
+                when (uiState) {
+                    is QuizResultListUiState.NoQuizResults -> {
+                        NoQuizResultsScreen(uiState = uiState)
+                    }
+                    is QuizResultListUiState.ListForUser -> {
+                        QuizResultListScreen(
+                            uiState = uiState,
+                            navigateToDetails = navigateToDetailScreen,
+                            maxWidthDp = maxWidthDp
+                        )
+                    }
+                    is QuizResultListUiState.ListForQuiz -> {
+                        QuizResultListScreen(
+                            uiState = uiState,
+                            navigateToDetails = navigateToDetailScreen,
+                            maxWidthDp = maxWidthDp
+                        )
+                    }
                 }
             }
         }

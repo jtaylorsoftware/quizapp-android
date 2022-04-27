@@ -1,11 +1,9 @@
 package com.github.jtaylorsoftware.quizapp.ui.quiz
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardActions
@@ -15,20 +13,22 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.platform.*
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.R
 import com.github.jtaylorsoftware.quizapp.data.QuestionType
@@ -39,6 +39,7 @@ import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -56,12 +57,12 @@ fun QuizEditorScreen(
     uiState: QuizEditorUiState.Editor,
     onSubmit: () -> Unit,
     scaffoldState: ScaffoldState = rememberScaffoldState(),
+    maxWidthDp: Dp = LocalConfiguration.current.screenWidthDp.dp,
 ) {
     val listState = rememberLazyListState()
 
     AppScaffold(
         modifier = Modifier.testTag("QuizEditorScreen"),
-        uiState = uiState,
         scaffoldState = scaffoldState,
         floatingActionButton = {
             QuizEditorFABs(
@@ -71,11 +72,20 @@ fun QuizEditorScreen(
             )
         }
     ) {
-        QuizEditor(
-            quizState = uiState.quizState,
-            isEditing = uiState.isEditing,
-            listState = listState
-        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+            Box(
+                Modifier
+                    .padding(it)
+                    .width(maxWidthDp),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                QuizEditor(
+                    quizState = uiState.quizState,
+                    isEditing = uiState.isEditing,
+                    listState = listState
+                )
+            }
+        }
     }
 }
 
@@ -98,21 +108,48 @@ private fun QuizEditorFABs(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    Column(Modifier
-        .pointerInput(Unit) {
-            detectTapGestures(onTap = {
-                focusManager.clearFocus()
-                keyboardController?.hide()
-            })
-        }
+    var dialogOpen by rememberSaveable { mutableStateOf(false) }
+
+    // Show dialog when trying to upload quiz to prevent accidental upload
+    if (dialogOpen) {
+        AlertDialog(
+            onDismissRequest = { dialogOpen = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dialogOpen = false
+                    onSubmit()
+                }) {
+                    Text("Upload")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+            text = { Text("Upload quiz? You won't be able to change some of the questions later.") },
+        )
+    }
+
+
+    Column(
+        Modifier
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                })
+            },
+        horizontalAlignment = Alignment.End
     ) {
         FABWithProgress(
             onClick = {
                 focusManager.clearFocus()
                 keyboardController?.hide()
-                onSubmit()
+                dialogOpen = true
             },
             isInProgress = isUploading,
+            backgroundColor = if (uiState.isEditing) MaterialTheme.colors.secondary else MaterialTheme.colors.secondaryVariant,
             progressIndicator = {
                 SmallCircularProgressIndicator(
                     Modifier.semantics { contentDescription = "Uploading quiz" },
@@ -128,21 +165,23 @@ private fun QuizEditorFABs(
             )
         }
         if (!uiState.isEditing) {
-            Spacer(Modifier.requiredHeight(8.dp))
-            FloatingActionButton(onClick = {
-                focusManager.clearFocus()
-                keyboardController?.hide()
-                coroutineScope.launch {
-                    listState.scrollToItem(listState.layoutInfo.totalItemsCount)
-                }
-                uiState.quizState.addQuestion()
-            }) {
-                Icon(
-                    Icons.Default.Add,
-                    "Add question",
-                    tint = MaterialTheme.colors.onSecondary
-                )
-            }
+            Spacer(Modifier.height(16.dp))
+            ExtendedFloatingActionButton(
+                text = { Text("Add question") },
+                onClick = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
+                    coroutineScope.launch {
+                        listState.scrollToItem(listState.layoutInfo.totalItemsCount)
+                    }
+                    uiState.quizState.addQuestion()
+                }, icon = {
+                    Icon(
+                        Icons.Default.Add,
+                        null,
+                        tint = MaterialTheme.colors.onSecondary
+                    )
+                })
         }
     }
 }
@@ -157,55 +196,157 @@ private fun QuizEditor(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
 
-    LazyColumn(state = listState, modifier = Modifier
-        .pointerInput(Unit) {
-            detectTapGestures(onTap = {
-                focusManager.clearFocus()
-                keyboardController?.hide()
-            })
-        }
-        .fillMaxWidth()
+    val clearFocusOnTap: (Offset) -> Unit = {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier
+            .pointerInput(Unit) { detectTapGestures(onTap = clearFocusOnTap) },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(16.dp),
     ) {
-        // Basic Quiz data
+        quizHeader(quizState)
+
+        questionItems(
+            quizState = quizState,
+            isEditing = isEditing,
+            listState = listState,
+        )
+
+        // Add some extra space so that user can scroll to adjust in case FAB covers content
+        // even with padding
         item {
+            Spacer(
+                Modifier
+                    .height(216.dp)
+                    .fillMaxWidth()
+            )
+        }
+    }
+}
+
+private fun LazyListScope.quizHeader(quizState: QuizState) {
+    item {
+        QuestionCard {
             QuizHeader(quizState = quizState)
         }
+    }
+}
 
-        item {
-            Text("Questions:")
-        }
+private fun LazyListScope.questionItems(
+    quizState: QuizState,
+    isEditing: Boolean,
+    listState: LazyListState,
+) {
+    // List of editable questions
+    itemsIndexed(quizState.questions, key = { _, q -> q.key }) { index, questionState ->
+        val scope = rememberCoroutineScope()
+        val offset = with(LocalDensity.current) { 216.dp.roundToPx() }
 
-        // List of editable questions
-        itemsIndexed(quizState.questions, key = { _, q -> q.key }) { index, questionState ->
-            // Display the index and delete button above the question content
-            Row {
-                Text("Question ${index + 1}:")
-                if (!isEditing) {
-                    IconButton(onClick = {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                        quizState.deleteQuestion(index)
-                    }) {
-                        Icon(
-                            Icons.Default.Delete,
-                            "Delete question",
-                            tint = MaterialTheme.colors.error
-                        )
+        QuestionCard {
+            QuestionItem(
+                index = index,
+                questionState = questionState,
+                isEditing = isEditing,
+                onChangeQuestionType = { quizState.changeQuestionType(index, it) },
+                onDeleteQuestion = { quizState.deleteQuestion(index) },
+                scrollToQuestionEnd = {
+                    scope.launch {
+                        // Allow questions to scroll to a little above their own size so that
+                        // they can prevent themselves from partially going offscreen on size changes (such as
+                        // multiple choice questions adding answers)
+                        listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == questionState.key }
+                            ?.let { item ->
+                                listState.scrollToItem(item.index, item.size - offset)
+                            }
                     }
+                },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun QuestionItem(
+    index: Int,
+    questionState: QuestionState,
+    isEditing: Boolean,
+    onChangeQuestionType: (QuestionType) -> Unit,
+    onDeleteQuestion: () -> Unit,
+    scrollToQuestionEnd: () -> Unit
+) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // Prevent accidentally deleting a question by using a dialog
+    var dialogOpen by rememberSaveable { mutableStateOf(false) }
+
+    if (dialogOpen) {
+        AlertDialog(
+            onDismissRequest = { dialogOpen = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dialogOpen = false
+                    onDeleteQuestion()
+                }) {
+                    Text("Delete")
                 }
-            }
-            // Display question content
-            Card {
-                QuestionEditor(
-                    questionState,
-                    onChangeQuestionType = {
-                        quizState.changeQuestionType(index, it)
-                    },
-                    isEditing = isEditing
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+            text = { Text("Delete question ${index + 1}?") },
+        )
+    }
+
+    // Display the index and a delete button above the question content
+    Row(
+        Modifier
+            .height(IntrinsicSize.Min)
+            .fillMaxWidth()
+    ) {
+        Box(Modifier.fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+            Text("Question ${index + 1}:")
+        }
+        Spacer(Modifier.weight(1.0f))
+        if (!isEditing) {
+            IconButton(onClick = {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                dialogOpen = true
+            }) {
+                Icon(
+                    Icons.Default.Delete,
+                    "Delete question",
+                    tint = MaterialTheme.colors.error
                 )
             }
         }
     }
+    questionState.error?.let {
+        Text(
+            it,
+            color = MaterialTheme.colors.error,
+            style = MaterialTheme.typography.caption,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
+    }
+
+
+    // Display question content
+    QuestionEditor(
+        questionState,
+        onChangeQuestionType = onChangeQuestionType,
+        isEditing = isEditing,
+        scrollToQuestionEnd = scrollToQuestionEnd
+    )
 }
 
 @Preview(group = "Quiz")
@@ -239,7 +380,7 @@ private fun QuizEditorPreview() {
                     isPublic = false,
                     questions = questionState,
                 ),
-                isEditing = false,
+                isEditing = false
             )
         }
     }
@@ -250,26 +391,32 @@ private fun QuizEditorPreview() {
  */
 @Composable
 private fun QuizHeader(quizState: QuizState) {
-    Card {
-        Column {
-            QuizTitle(
-                title = quizState.title,
-                onTitleChange = {
-                    quizState.changeTitleText(it)
-                }
-            )
-            AllowedUsers(
-                isPublic = quizState.isPublic,
-                onChangeIsPublic = { quizState.isPublic = it },
-                allowedUsers = quizState.allowedUsers,
-                onChangeAllowedUsers = { quizState.allowedUsers = it },
-                allowedUsersError = quizState.allowedUsersError
-            )
-            Expiration(
-                expiration = quizState.expiration,
-                changeExpiration = { quizState.expiration = it },
-                expirationError = quizState.expirationError
-            )
+    QuizTitle(
+        title = quizState.title,
+        onTitleChange = {
+            quizState.changeTitleText(it)
+        }
+    )
+    AllowedUsers(
+        isPublic = quizState.isPublic,
+        onChangeIsPublic = { quizState.isPublic = it },
+        allowedUsers = quizState.allowedUsers,
+        onChangeAllowedUsers = { quizState.allowedUsers = it },
+        allowedUsersError = quizState.allowedUsersError
+    )
+    Expiration(
+        expiration = quizState.expiration,
+        changeExpiration = { quizState.expiration = it },
+        expirationError = quizState.expirationError
+    )
+    Box(
+        Modifier
+            .requiredHeight(32.dp)
+            .fillMaxWidth(),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        quizState.questionsError?.let {
+            Text(it, style = MaterialTheme.typography.caption, color = MaterialTheme.colors.error)
         }
     }
 }
@@ -281,24 +428,16 @@ private fun QuizHeader(quizState: QuizState) {
 @Composable
 private fun QuizTitle(title: TextFieldState, onTitleChange: (String) -> Unit) {
     val keyboardController = LocalSoftwareKeyboardController.current
-    TextField(
-        value = title.text,
-        onValueChange = onTitleChange,
-        isError = title.error != null,
-        label = {
-            Text("Quiz Title")
-        },
-        modifier = Modifier.semantics {
-            contentDescription = "Edit quiz title"
-        },
+
+    AppTextField(
+        state = title,
+        onTextChange = onTitleChange,
+        modifier = Modifier.fillMaxWidth(),
+        containerModifier = Modifier.fillMaxWidth(),
+        label = "Quiz Title",
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
     )
-    title.error?.let {
-        Text(it, modifier = Modifier.semantics {
-            contentDescription = "Quiz title hint"
-        })
-    }
 }
 
 /**
@@ -313,35 +452,39 @@ private fun AllowedUsers(
     onChangeAllowedUsers: (String) -> Unit,
     allowedUsersError: String?,
 ) {
+    val textFieldState =
+        remember(allowedUsers) { TextFieldState(text = allowedUsers, error = allowedUsersError) }
     val keyboardController = LocalSoftwareKeyboardController.current
-    Row {
-        Text("Public Quiz?")
+    Row(
+        Modifier
+            .height(IntrinsicSize.Min)
+            .fillMaxWidth()
+    ) {
+        val onClick = { onChangeIsPublic(!isPublic) }
+        Box(
+            Modifier
+                .clickable(onClick = onClick)
+                .fillMaxHeight(),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Text("Public Quiz")
+        }
+        Spacer(Modifier.weight(1.0f))
         Switch(
             checked = isPublic,
-            onCheckedChange = onChangeIsPublic,
-            modifier = Modifier.semantics {
-                contentDescription = "Toggle public quiz"
-            })
+            onCheckedChange = { onClick() }
+        )
     }
     if (!isPublic) {
-        TextField(
-            value = allowedUsers,
-            onValueChange = onChangeAllowedUsers,
-            label = {
-                Text("Allowed Users")
-            },
-            modifier = Modifier.semantics {
-                contentDescription = "Edit allowed users"
-            },
-            isError = allowedUsersError != null,
+        AppTextField(
+            state = textFieldState,
+            onTextChange = onChangeAllowedUsers,
+            label = "Allowed Users",
+            modifier = Modifier.fillMaxWidth(),
+            containerModifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
         )
-        allowedUsersError?.let { error ->
-            Text(error, modifier = Modifier.semantics {
-                contentDescription = "Allowed users hint"
-            })
-        }
     }
 }
 
@@ -363,48 +506,117 @@ private fun Expiration(
         expirationDateTime.format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
     }
 
-    var datePickerOpen: Boolean by remember { mutableStateOf(false) }
-    var timePickerOpen: Boolean by remember { mutableStateOf(false) }
 
-    Text("Expiration:")
-    expirationError?.let {
-        Text("Error: $it", color = MaterialTheme.colors.error)
+    var datePickerOpen: Boolean by rememberSaveable(key = "EXPIRATION_DATE_PICKER_OPEN") {
+        mutableStateOf(
+            false
+        )
     }
-    Row {
-        Text("Date:")
-        OutlinedButton(onClick = { datePickerOpen = true }, modifier = Modifier.semantics {
-            contentDescription = "Change expiration date"
-        }) {
+
+    // Note: For some reason, this code started causing cast exceptions (Bool -> LocalDateTime)
+    // on restoring state after rotations without explicit keys. Added explicit keys to
+    // each call for safety, even though only `dateValue` had problems.
+    var dateValue by rememberSaveable(expirationDateTime, key = "EXPIRATION_DATE_VALUE") {
+        mutableStateOf(
+            expirationDateTime.toLocalDate()
+        )
+    }
+
+    var timePickerOpen: Boolean by rememberSaveable(key = "EXPIRATION_TIME_PICKER_OPEN") {
+        mutableStateOf(
+            false
+        )
+    }
+
+    var timeValue: LocalTime by rememberSaveable(
+        expirationDateTime,
+        key = "EXPIRATION_TIME_VALUE"
+    ) {
+        mutableStateOf(
+            expirationDateTime.toLocalTime()
+        )
+    }
+
+    Text("Edit Expiration:")
+    Box(
+        Modifier
+            .requiredHeight(32.dp)
+            .fillMaxWidth(),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        expirationError?.let {
+            Text(
+                "Error: $it",
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.error
+            )
+        }
+    }
+    Row(
+        Modifier
+            .height(IntrinsicSize.Min),
+    ) {
+        val onClick = { datePickerOpen = true }
+        Box(
+            Modifier
+                .clickable(onClick = onClick)
+                .fillMaxHeight(),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Text("Date:", textAlign = TextAlign.Center)
+        }
+        Spacer(Modifier.weight(1.0f))
+        OutlinedButton(onClick = onClick) {
             Text(text = expirationDateStr)
         }
     }
-    Row {
-        Text("Time:")
-        OutlinedButton(onClick = { timePickerOpen = true }, modifier = Modifier.semantics {
-            contentDescription = "Change expiration time"
-        }) {
+    Row(
+        Modifier
+            .height(IntrinsicSize.Min)
+    ) {
+        val onClick = { timePickerOpen = true }
+        Box(
+            Modifier
+                .clickable(onClick = onClick)
+                .fillMaxHeight(),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Text("Time:", textAlign = TextAlign.Center)
+        }
+        Spacer(Modifier.weight(1.0f))
+        OutlinedButton(onClick = onClick) {
             Text(text = expirationTimeStr)
         }
     }
 
     AppDatePicker(
-        defaultValue = expirationDateTime.toLocalDate(),
+        value = dateValue,
+        onValueChange = {
+            dateValue = it
+        },
         open = datePickerOpen,
         onDismiss = {
             datePickerOpen = false
             changeExpiration(
-                LocalDateTime.of(it, expirationDateTime.toLocalTime())
+                LocalDateTime.of(dateValue, expirationDateTime.toLocalTime())
                     .atZone(ZoneId.systemDefault()).toInstant()
             )
         })
 
-    AppTimePicker(value = expirationDateTime.toLocalTime(), open = timePickerOpen, onDismiss = {
-        timePickerOpen = false
-        changeExpiration(
-            LocalDateTime.of(expirationDateTime.toLocalDate(), it).atZone(ZoneId.systemDefault())
-                .toInstant()
-        )
-    })
+    AppTimePicker(
+        value = timeValue,
+        onValueChange = {
+            timeValue = it
+        },
+        open = timePickerOpen,
+        onDismiss = {
+            timePickerOpen = false
+            changeExpiration(
+                LocalDateTime.of(expirationDateTime.toLocalDate(), timeValue)
+                    .atZone(ZoneId.systemDefault())
+                    .toInstant()
+            )
+        })
 }
 
 /**
@@ -415,28 +627,28 @@ private fun QuestionEditor(
     questionState: QuestionState,
     onChangeQuestionType: (QuestionType) -> Unit,
     isEditing: Boolean,
+    scrollToQuestionEnd: () -> Unit
 ) {
-    Column {
-        // Cannot change the type at all when editing
-        if (!isEditing) {
-            QuestionTypeSelector(questionState = questionState, onSelectType = onChangeQuestionType)
-        }
+    // Cannot change the type at all when editing
+    if (!isEditing) {
+        QuestionTypeSelector(questionState = questionState, onSelectType = onChangeQuestionType)
+    }
 
-        // Show a different body or answer editor depending on the type of question.
-        when (questionState) {
-            is QuestionState.Empty -> {}
-            is QuestionState.MultipleChoice -> {
-                MultipleChoiceQuestion(
-                    question = questionState,
-                    isEditing = isEditing,
-                )
-            }
-            is QuestionState.FillIn -> {
-                FillInQuestion(
-                    question = questionState,
-                    isEditing = isEditing
-                )
-            }
+    // Show a different body or answer editor depending on the type of question.
+    when (questionState) {
+        is QuestionState.Empty -> {}
+        is QuestionState.MultipleChoice -> {
+            MultipleChoiceQuestion(
+                question = questionState,
+                isEditing = isEditing,
+                scrollToQuestionEnd = scrollToQuestionEnd
+            )
+        }
+        is QuestionState.FillIn -> {
+            FillInQuestion(
+                question = questionState,
+                isEditing = isEditing
+            )
         }
     }
 }
@@ -447,37 +659,34 @@ private fun QuestionEditor(
 private fun QuestionEditorPreview() {
     QuizAppTheme {
         Column {
-            Card {
-                QuestionEditor(
-                    questionState = PreviewEmptyState(),
-                    onChangeQuestionType = {},
-                    isEditing = false
-                )
-            }
+            QuestionEditor(
+                questionState = PreviewEmptyState(),
+                onChangeQuestionType = {},
+                isEditing = false,
+                scrollToQuestionEnd = {}
+            )
             Spacer(
                 Modifier
                     .fillMaxWidth()
                     .height(8.dp)
             )
-            Card {
-                QuestionEditor(
-                    questionState = PreviewFillInState(),
-                    onChangeQuestionType = {},
-                    isEditing = false
-                )
-            }
+            QuestionEditor(
+                questionState = PreviewFillInState(),
+                onChangeQuestionType = {},
+                isEditing = false,
+                scrollToQuestionEnd = {}
+            )
             Spacer(
                 Modifier
                     .fillMaxWidth()
                     .height(8.dp)
             )
-            Card {
-                QuestionEditor(
-                    questionState = PreviewMultipleChoiceState(),
-                    onChangeQuestionType = {},
-                    isEditing = false
-                )
-            }
+            QuestionEditor(
+                questionState = PreviewMultipleChoiceState(),
+                onChangeQuestionType = {},
+                isEditing = false,
+                scrollToQuestionEnd = {}
+            )
         }
     }
 }
@@ -490,43 +699,78 @@ private fun QuestionTypeSelector(
     questionState: QuestionState,
     onSelectType: (QuestionType) -> Unit,
 ) {
-    val selectedType = questionState.data.type
-    Row {
-        Text("Question type:")
+    val currentType = questionState.data.type
+
+    // Prevent accidentally changing the type and resetting data by showing a dialog
+    var dialogOpen by rememberSaveable { mutableStateOf(false) }
+    var nextType by rememberSaveable { mutableStateOf(QuestionType.Empty) }
+
+    if (dialogOpen) {
+        AlertDialog(
+            onDismissRequest = { dialogOpen = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dialogOpen = false
+                    onSelectType(nextType)
+                }) {
+                    Text("Confirm")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+            text = { Text("Change question type?") },
+        )
+    }
+
+    val onClickType: (QuestionType) -> Unit = {
+        nextType = it
+        if (currentType == QuestionType.Empty) {
+            onSelectType(nextType)
+        } else if (currentType != nextType) {
+            // The user has already picked the type once, use dialog to confirm
+            dialogOpen = true
+        }
+    }
+
+    Row(Modifier.height(IntrinsicSize.Min)) {
+        Box(Modifier.fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
+            Text("Type:")
+        }
+
+        Spacer(Modifier.weight(1.0f))
 
         // Row of icons representing selected type while also giving ability to change it
         // by pressing the desired type (resets current Question)
         Row(Modifier.selectableGroup()) {
-            Box(
-                Modifier
+            Icon(
+                painter = painterResource(R.drawable.ic_border_color_24),
+                contentDescription = "Fill in the blank",
+                tint = if (currentType == QuestionType.FillIn) MaterialTheme.colors.secondary else MaterialTheme.colors.onSurface,
+                modifier = Modifier
                     .selectable(
-                        selected = selectedType == QuestionType.FillIn,
-                        onClick = { onSelectType(QuestionType.FillIn) })
-                    .size(48.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_border_color_24),
-                    contentDescription = "Fill in the blank question",
-                    tint = if (selectedType == QuestionType.FillIn) MaterialTheme.colors.primary else Color.DarkGray,
-                )
-            }
-
-            Box(
-                Modifier
+                        selected = currentType == QuestionType.FillIn,
+                        onClick = {
+                            onClickType(QuestionType.FillIn)
+                        })
+                    .padding(12.dp)
+                    .requiredSize(24.dp),
+            )
+            Icon(
+                painter = painterResource(R.drawable.ic_format_list_numbered_24),
+                contentDescription = "Multiple choice",
+                tint = if (currentType == QuestionType.MultipleChoice) MaterialTheme.colors.secondary else MaterialTheme.colors.onSurface,
+                modifier = Modifier
                     .selectable(
-                        selected = selectedType == QuestionType.MultipleChoice,
-                        onClick = { onSelectType(QuestionType.MultipleChoice) })
-                    .size(48.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_format_list_numbered_24),
-                    contentDescription = "Multiple choice question",
-                    tint = if (selectedType == QuestionType.MultipleChoice) MaterialTheme.colors.primary else Color.DarkGray,
-                )
-            }
-
+                        selected = currentType == QuestionType.MultipleChoice,
+                        onClick = {
+                            onClickType(QuestionType.MultipleChoice)
+                        })
+                    .padding(12.dp)
+                    .requiredSize(24.dp),
+            )
         }
     }
 }
@@ -554,25 +798,36 @@ private fun QuestionTypeSelectorPreview() {
 private fun MultipleChoiceQuestion(
     question: QuestionState.MultipleChoice,
     isEditing: Boolean,
+    scrollToQuestionEnd: () -> Unit,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
-    TextField(
-        value = question.prompt.text,
-        onValueChange = { question.changePrompt(it) },
-        label = {
-            Text("Question prompt")
-        },
-        isError = question.prompt.error != null,
+    AppTextField(
+        state = question.prompt,
+        onTextChange = { question.changePrompt(it) },
+        label = "Question prompt",
+        modifier = Modifier.fillMaxWidth(),
+        containerModifier = Modifier.fillMaxWidth(),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
     )
-    question.prompt.error?.let {
-        Text(it, modifier = Modifier.semantics {
-            contentDescription = "Question prompt hint"
-        })
+    if (!isEditing) {
+        CompositionLocalProvider(LocalContentAlpha provides ContentAlpha.medium) {
+            Text(
+                "Tap an answer to mark it as the correct choice",
+                style = MaterialTheme.typography.caption
+            )
+        }
     }
-    Text("Tap an answer to mark it as the correct choice")
-    Column(Modifier.selectableGroup()) {
+    Spacer(
+        Modifier
+            .height(8.dp)
+            .fillMaxWidth()
+    )
+    Column(
+        Modifier
+            .selectableGroup()
+            .fillMaxWidth()
+    ) {
         question.answers.forEachIndexed { index, answer ->
             MultipleChoiceAnswer(
                 index,
@@ -589,9 +844,28 @@ private fun MultipleChoiceQuestion(
         }
     }
     if (!isEditing) {
-        OutlinedButton(onClick = question::addAnswer) {
-            Text("Add answer")
+        val focusManager = LocalFocusManager.current
+        val addAnswerAndScroll: () -> Unit = {
+            focusManager.clearFocus()
+            keyboardController?.hide()
+            question.addAnswer()
+            scrollToQuestionEnd()
         }
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+            OutlinedButton(onClick = addAnswerAndScroll) {
+                Text("Add answer")
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuestionCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(modifier, elevation = 1.dp) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), content = content)
     }
 }
 
@@ -608,12 +882,13 @@ private fun MultipleChoiceQuestionPreview() {
                         text = "Question Prompt",
                         correctAnswer = 1,
                         answers = listOf(
-                            Question.MultipleChoice.Answer("Answer text 1"),
+                            Question.MultipleChoice.Answer("Answer text 1 ".repeat(5)),
                             Question.MultipleChoice.Answer("Answer text 2")
                         )
                     )
                 ),
-                isEditing = false
+                isEditing = false,
+                scrollToQuestionEnd = {}
             )
         }
     }
@@ -633,44 +908,69 @@ private fun MultipleChoiceAnswer(
     isEditing: Boolean
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
-    Row {
+    Row(Modifier.height(IntrinsicSize.Min)) {
         // Row that looks like: (Radio) 1. answer text [Delete]
-        RadioButton(selected = selected, onClick = onSelected, enabled = !isEditing,
-            modifier = Modifier.semantics {
-                contentDescription = "Pick answer ${index + 1}"
-            })
-        Column {
-            TextField(
-                value = answer.text.text,
-                onValueChange = { answer.changeText(it) },
-                label = {
-                    Text("Answer text")
-                },
-                modifier = Modifier
-                    .semantics {
-                        contentDescription = "Edit answer ${index + 1} text"
-                    },
-                isError = answer.text.error != null,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
-            )
-            answer.text.error?.let {
-                Text(it, modifier = Modifier.semantics {
-                    contentDescription = "Answer ${index + 1} hint"
-                })
-            }
-        }
+        RadioButton(
+            selected = selected,
+            onClick = onSelected,
+            enabled = !isEditing,
+            modifier = Modifier
+                .semantics {
+                    contentDescription = "Pick answer ${index + 1}"
+                }
+                .padding(top = 12.dp) // Computed size of Radio is 48dp with 24dp icon, push down by 12 to center
+                .alignBy(FirstBaseline) // Align entire Radio and its internal padding
+        )
+        AppTextField(
+            state = answer.text,
+            onTextChange = { answer.changeText(it) },
+            label = "Answer text",
+            modifier = Modifier.fillMaxWidth(),
+            containerModifier = Modifier
+                .alignBy(FirstBaseline)
+                .weight(1.0f),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
+        )
         if (!isEditing) {
-            IconButton(onClick = onDelete, modifier = Modifier.semantics {
-                contentDescription = "Delete answer ${index + 1}"
-            }) {
-                Icon(Icons.Default.Delete, null)
+            // Prevent accidental deletion by showing a dialog
+            var dialogOpen by rememberSaveable { mutableStateOf(false) }
+            if (dialogOpen) {
+                AlertDialog(
+                    onDismissRequest = { dialogOpen = false },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            dialogOpen = false
+                            onDelete()
+                        }) {
+                            Text("Delete")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { dialogOpen = false }) {
+                            Text("Cancel")
+                        }
+                    },
+                    text = { Text("Delete answer ${index + 1}?") },
+                )
+            }
+            IconButton(
+                onClick = { dialogOpen = true }, modifier = Modifier
+                    .padding(top = 12.dp)
+                    .alignBy(FirstBaseline)
+                    .requiredSize(48.dp)
+            ) {
+                Icon(
+                    Icons.Default.Delete,
+                    "Delete answer ${index + 1}",
+                    tint = MaterialTheme.colors.error
+                )
             }
         }
     }
 }
 
-@Preview(showBackground = true, group = "MultipleChoice")
+@Preview(showBackground = true, group = "MultipleChoice", widthDp = 400)
 @Composable
 private fun MultipleChoiceAnswerPreview() {
     QuizAppTheme {
@@ -678,7 +978,7 @@ private fun MultipleChoiceAnswerPreview() {
             index = 1,
             answer = PreviewMultipleChoiceState.PreviewAnswerHolder(
                 TextFieldState(
-                    text = "Answer text",
+                    text = "Answer text ".repeat(10),
                     error = "Answer error"
                 )
             ),
@@ -700,41 +1000,25 @@ private fun FillInQuestion(
     isEditing: Boolean,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
-    TextField(
-        value = question.prompt.text,
-        onValueChange = { question.changePrompt(it) },
-        label = {
-            Text("Question prompt")
-        },
-        isError = question.prompt.error != null,
+    AppTextField(
+        state = question.prompt,
+        onTextChange = { question.changePrompt(it) },
+        label = "Question prompt",
+        modifier = Modifier.fillMaxWidth(),
+        containerModifier = Modifier.fillMaxWidth(),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
     )
-    question.prompt.error?.let {
-        Text(it, modifier = Modifier.semantics {
-            contentDescription = "Question prompt hint"
-        })
-    }
-
-    TextField(
-        value = question.correctAnswer.text,
-        onValueChange = { question.changeCorrectAnswer(it) },
-        label = {
-            Text("Correct answer")
-        },
-        modifier = Modifier
-            .semantics {
-                contentDescription = "Change correct answer text"
-            }, enabled = !isEditing,
-        isError = question.correctAnswer.error != null,
+    AppTextField(
+        state = question.correctAnswer,
+        onTextChange = { question.changeCorrectAnswer(it) },
+        label = "Correct answer",
+        modifier = Modifier.fillMaxWidth(),
+        containerModifier = Modifier.fillMaxWidth(),
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-        keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() })
+        keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
+        enabled = !isEditing,
     )
-    question.correctAnswer.error?.let {
-        Text(it, modifier = Modifier.semantics {
-            contentDescription = "Fill-in answer hint"
-        })
-    }
 }
 
 @Preview(showBackground = true, group = "FillIn")

@@ -1,9 +1,14 @@
-package com.github.jtaylorsoftware.quizapp.ui.login
+package com.github.jtaylorsoftware.quizapp.ui.signinsignup
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.ScaffoldState
 import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import com.github.jtaylorsoftware.quizapp.ui.components.AppScaffold
@@ -17,27 +22,27 @@ import com.github.jtaylorsoftware.quizapp.ui.components.AppScaffold
  * @param navigateToSignUp Callback invoked when the user should be redirected to the sign-up screen.
  */
 @Composable
-fun LoginRoute(
-    viewModel: LoginViewModel,
+fun SignInRoute(
+    viewModel: SignInViewModel,
     onBackPressed: () -> Unit,
     navigateToSignUp: () -> Unit,
+    scaffoldState: ScaffoldState,
 ) {
-    LoginRoute(
+    SignInRoute(
         uiState = viewModel.uiState,
         onUsernameChanged = viewModel::setUsername,
         onPasswordChanged = viewModel::setPassword,
         login = viewModel::login,
         navigateToSignUp = navigateToSignUp,
+        scaffoldState = scaffoldState,
     )
 
-    BackHandler {
-        onBackPressed()
-    }
+    BackHandler(onBack = onBackPressed)
 }
 
 @Composable
-fun LoginRoute(
-    uiState: LoginUiState,
+fun SignInRoute(
+    uiState: SignInUiState,
     onUsernameChanged: (String) -> Unit,
     onPasswordChanged: (String) -> Unit,
     login: () -> Unit,
@@ -47,14 +52,21 @@ fun LoginRoute(
     AppScaffold(
         modifier = Modifier.testTag("LoginRoute"),
         scaffoldState = scaffoldState,
-        uiState = uiState
-    ) {
-        LoginScreen(
-            uiState = uiState,
-            onUsernameChanged = onUsernameChanged,
-            onPasswordChanged = onPasswordChanged,
-            login = login,
-            navigateToSignup = navigateToSignUp
-        )
+    ) { paddingValues ->
+        Row(
+            Modifier
+                .padding(paddingValues)
+                .fillMaxSize(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SignInScreen(
+                uiState = uiState,
+                onUsernameChanged = onUsernameChanged,
+                onPasswordChanged = onPasswordChanged,
+                login = login,
+                navigateToSignup = navigateToSignUp
+            )
+        }
     }
 }

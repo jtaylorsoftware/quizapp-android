@@ -4,7 +4,6 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import com.github.jtaylorsoftware.quizapp.MainActivity
 import com.github.jtaylorsoftware.quizapp.auth.AuthenticationState
-import com.github.jtaylorsoftware.quizapp.auth.AuthenticationStateSource
 import com.github.jtaylorsoftware.quizapp.testdata.loggedInUserUsername
 import com.github.jtaylorsoftware.quizapp.ui.navigation.Screens
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -13,7 +12,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
-import javax.inject.Inject
 
 @ExperimentalCoroutinesApi
 @HiltAndroidTest
@@ -45,12 +43,6 @@ class QuizAppTest {
         composeTestRule.onNodeWithTag("AppBottomNavigationBar").onChild().onChildren()
             .filterToOne(hasText("Quizzes")).performClick()
 
-        composeTestRule.waitUntil {
-            with(composeTestRule.activity) {
-                navigator.state.currentRoute == Screens.Users.Quizzes.route
-            }
-        }
-
         composeTestRule.onNodeWithTag("QuizListRoute").assertIsDisplayed()
     }
 
@@ -59,13 +51,7 @@ class QuizAppTest {
         composeTestRule.onNodeWithTag("AppBottomNavigationBar").onChild().onChildren()
             .filterToOne(hasText("Results")).performClick()
 
-        composeTestRule.waitUntil {
-            with(composeTestRule.activity) {
-                navigator.state.currentRoute == Screens.Users.QuizResults.route
-            }
-        }
-
-        composeTestRule.onNodeWithText("Your Quiz Results").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("QuizResultListRoute").assertIsDisplayed()
     }
 
     @Test
@@ -77,12 +63,6 @@ class QuizAppTest {
         composeTestRule.onNodeWithTag("AppBottomNavigationBar").onChild().onChildren()
             .filterToOne(hasText("Profile")).performClick()
 
-        composeTestRule.waitUntil {
-            with(composeTestRule.activity) {
-                navigator.state.currentRoute == Screens.Users.Profile.route
-            }
-        }
-
         composeTestRule.onNodeWithText("Hello, $loggedInUserUsername").assertIsDisplayed()
     }
 
@@ -91,12 +71,6 @@ class QuizAppTest {
         composeTestRule.onNodeWithTag("AppBottomNavigationBar").onChild().onChildren()
             .filterToOne(hasText("Quizzes")).performClick()
         composeTestRule.onNodeWithContentDescription("Create quiz").performClick()
-
-        composeTestRule.waitUntil {
-            with(composeTestRule.activity) {
-                navigator.state.currentRoute == Screens.Quizzes.Create.route
-            }
-        }
 
         composeTestRule.onNodeWithTag("QuizEditorScreen").assertIsDisplayed()
     }
@@ -108,31 +82,36 @@ class QuizAppTest {
 
         composeTestRule.onNodeWithContentDescription("View Results").performClick()
 
-        composeTestRule.waitUntil {
-            with(composeTestRule.activity) {
-                navigator.state.currentRoute == Screens.Quizzes.Results.route
-            }
-        }
-
         composeTestRule.onNodeWithTag("QuizResultListRoute").assertIsDisplayed()
     }
 
-    // Test is flaky when ran alongside others (unsure reason, just simply refuses to
-    // find any necessary nodes even when it's clearly on the screen). Running it on its
-    // own will work even without tapping bottom nav, or using extra tags
     @Test
-    fun tapEditProfile_andThenTapSignOut_shouldNavigateToLogin() {
+    fun tapSignOut_shouldNavigateToLogin() {
         composeTestRule.onNodeWithTag("AppBottomNavigationBar").onChild().onChildren()
             .filterToOne(hasText("Profile")).performClick()
+
         composeTestRule.onNodeWithTag("ProfileRoute").assertIsDisplayed()
-        composeTestRule.onNodeWithTag("EditProfile").performClick()
-        composeTestRule.onNodeWithTag("LogOut").performClick()
-        composeTestRule.waitUntil {
-            with(composeTestRule.activity) {
-                authStateSource.state is AuthenticationState.RequireAuthentication &&
-                        navigator.state.currentRoute == Screens.LogIn.route
-            }
-        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithContentDescription("Log out").performClick()
+
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Confirm").performClick()
+
+        // Should sign out
         composeTestRule.onNodeWithTag("LoginRoute").assertIsDisplayed()
+    }
+
+    @Test
+    fun tapSettingsIcon_shouldOpenSettingsMenu() {
+        composeTestRule.onNodeWithTag("AppBottomNavigationBar").onChild().onChildren()
+            .filterToOne(hasText("Profile")).performClick()
+
+        composeTestRule.onNodeWithTag("ProfileRoute").assertIsDisplayed()
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithContentDescription("Settings").performClick()
+
+        composeTestRule.onNodeWithText("Profile Settings").assertIsDisplayed()
     }
 }

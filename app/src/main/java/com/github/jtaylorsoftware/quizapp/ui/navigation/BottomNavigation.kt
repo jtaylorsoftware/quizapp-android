@@ -1,10 +1,25 @@
 package com.github.jtaylorsoftware.quizapp.ui.navigation
 
 import androidx.annotation.DrawableRes
+import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.NavController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.github.jtaylorsoftware.quizapp.R
+import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
+import com.github.jtaylorsoftware.quizapp.ui.theme.bottomAppBar
+import com.github.jtaylorsoftware.quizapp.ui.theme.onBottomAppBar
 
 /**
  * Wraps a [Screens] that has a bottom navigation action with its icon and label.
@@ -15,7 +30,7 @@ sealed class BottomNavDestination(
     /**
      * Called to perform navigation to this item.
      */
-    val onNavigate: (Navigator) -> Unit,
+    val onNavigate: (NavActions) -> Unit,
 
     /**
      * The resId of the icon to display for bottom navigation.
@@ -33,7 +48,7 @@ sealed class BottomNavDestination(
      * The label to display for bottom navigation.
      */
     // TODO
-//        @StringRes val labelRes: Int? = null,
+    // @StringRes val labelRes: Int? = null,
     val label: String
 ) {
     object Profile :
@@ -46,7 +61,7 @@ sealed class BottomNavDestination(
 
     object Quizzes :
         BottomNavDestination(
-            Screens.Users.Quizzes,
+            Screens.Users.Quizzes.List,
             onNavigate = { it.navigateToProfileQuizzes() },
             iconRes = R.drawable.ic_format_list_numbered_24,
             label = "Quizzes"
@@ -62,15 +77,68 @@ sealed class BottomNavDestination(
 }
 
 /**
- * Set of [Screens] that should have an icon in bottom navigation.
+ * Map of [Screens] to [BottomNavDestination] that should have an icon in bottom navigation.
  */
-val bottomNavDestinations = setOf(
-    BottomNavDestination.Quizzes,
-    BottomNavDestination.Profile,
-    BottomNavDestination.QuizResults
+val bottomNavDestinations = mapOf(
+    BottomNavDestination.Quizzes.screen to BottomNavDestination.Quizzes,
+    BottomNavDestination.Profile.screen to BottomNavDestination.Profile,
+    BottomNavDestination.QuizResults.screen to BottomNavDestination.QuizResults
 )
 
 /**
- * Set of routes of the [Screens] that should have an icon in bottom navigation.
+ * Displays the [BottomNavigation] used for the app's top-level destinations, using a [NavActions]
+ * to perform navigation.
  */
-val bottomNavRoutes = bottomNavDestinations.map { it.screen.route }.toSet()
+@Composable
+fun BottomNavigation(navController: NavController, navActions: NavActions) {
+    val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentScreen by rememberUpdatedState(screens[backStackEntry?.destination?.route])
+    val displayBottomNavigation by derivedStateOf {
+        currentScreen in bottomNavDestinations
+    }
+
+    if (displayBottomNavigation) {
+        BottomNavigation(
+            Modifier.testTag("AppBottomNavigationBar"),
+            backgroundColor = MaterialTheme.colors.bottomAppBar,
+            contentColor = MaterialTheme.colors.onBottomAppBar,
+        ) {
+            bottomNavDestinations.forEach { (_, destination) ->
+                BottomNavigationItem(
+                    selected = currentScreen == destination.screen,
+                    icon = {
+                        when {
+                            destination.iconVector != null -> {
+                                Icon(destination.iconVector, contentDescription = null)
+                            }
+                            destination.iconRes != null -> {
+                                Icon(
+                                    painterResource(destination.iconRes),
+                                    contentDescription = null
+                                )
+                            }
+                        }
+                    },
+                    label = { Text(destination.label) },
+                    onClick = {
+                        destination.onNavigate(navActions)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun AppBottomNavigationPreview() {
+    QuizAppTheme {
+        val navController = rememberNavController()
+        val navActions = rememberNavActions(navController)
+        Scaffold(bottomBar = {
+            BottomNavigation(navController, navActions)
+        }) {
+
+        }
+    }
+}

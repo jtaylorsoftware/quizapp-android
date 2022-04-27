@@ -23,8 +23,7 @@ import kotlinx.coroutines.launch
  * The error content is separated from [content] by a [Spacer], whose height
  * can be changed with [spacerHeight].
  *
- * Text content should have a style less hierarchically important than header
- * styles.
+ * Text content should have a style at most as hierarchically important as `MaterialTheme.typography.h6`.
  */
 @Composable
 fun ErrorScreen(
@@ -56,25 +55,24 @@ fun ErrorScreen(
 
 @Composable
 private fun ErrorContent(spacerHeight: Dp, content: @Composable (ColumnScope.() -> Unit)) {
-    Surface {
-        Column(
+    Column(
+        Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(vertical = 64.dp)
+            .fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "Something went wrong...",
+            style = MaterialTheme.typography.h5
+        )
+        Spacer(
             Modifier
-                .verticalScroll(rememberScrollState())
-                .fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                "Something went wrong...",
-                style = MaterialTheme.typography.h5
-            )
-            Spacer(
-                Modifier
-                    .height(spacerHeight)
-                    .fillMaxWidth()
-            )
-            content()
-        }
+                .height(spacerHeight)
+                .fillMaxWidth()
+        )
+        content()
     }
 }
 
@@ -90,8 +88,10 @@ private fun ErrorScreenWithRefreshPreview() {
     }
     val scope = rememberCoroutineScope()
     QuizAppTheme {
-        ErrorScreen(refreshing, { scope.launch { onRefresh() } }) {
-            Text("You can't access this content.")
+        Surface(color = MaterialTheme.colors.background) {
+            ErrorScreen(refreshing, { scope.launch { onRefresh() } }) {
+                Text("You can't access this content.")
+            }
         }
     }
 }

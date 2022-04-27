@@ -6,6 +6,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.github.jtaylorsoftware.quizapp.data.domain.models.Question
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizForm
+import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import io.mockk.confirmVerified
 import io.mockk.justRun
 import io.mockk.mockk
@@ -30,7 +31,6 @@ class QuizFormScreenTest {
             )
         ),
         Question.FillIn(text = "Fill Question 1"),
-        Question.FillIn(text = "Fill Question 2"),
         Question.MultipleChoice(
             text = "MC Question 2", answers = listOf(
                 Question.MultipleChoice.Answer("MC Answer 2-1"),
@@ -38,7 +38,7 @@ class QuizFormScreenTest {
                 Question.MultipleChoice.Answer("MC Answer 2-3"),
             )
         ),
-        Question.FillIn(text = "Fill Question 3"),
+        Question.FillIn(text = "Fill Question 2"),
     )
     private val quiz = QuizForm(
         createdBy = "Username123",
@@ -66,10 +66,15 @@ class QuizFormScreenTest {
 
     @Test
     fun shouldDisplayHeader() {
+        val uiState = QuizFormUiState.Form(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            quiz = quiz,
+            responses = responses,
+        )
         composeTestRule.setContent {
             QuizFormScreen(
-                quiz,
-                responses,
+                uiState = uiState,
                 onSubmit = {})
         }
 
@@ -79,10 +84,15 @@ class QuizFormScreenTest {
 
     @Test
     fun shouldDisplayEachQuestion() {
+        val uiState = QuizFormUiState.Form(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            quiz = quiz,
+            responses = responses,
+        )
         composeTestRule.setContent {
             QuizFormScreen(
-                quiz,
-                responses,
+                uiState = uiState,
                 onSubmit = {})
         }
 
@@ -92,13 +102,15 @@ class QuizFormScreenTest {
             )
 
         questions.forEachIndexed { i, question ->
-            composeTestRule.onNodeWithText("${i + 1}. ${question.text}:").assertIsDisplayed()
+            composeTestRule.onNodeWithText("Question ${i + 1}.").performScrollTo()
+            composeTestRule.onNodeWithText("Question ${i + 1}.").assertIsDisplayed()
+            composeTestRule.onNodeWithText(question.text).assertIsDisplayed()
             when (question) {
                 is Question.Empty -> {}
                 is Question.MultipleChoice -> {
                     question.answers.forEachIndexed { j, answer ->
-                        composeTestRule.onNodeWithText("${j + 1}. ${answer.text}")
-                            .assertHasClickAction()
+                        composeTestRule.onNodeWithText("${j + 1}. ${answer.text}").performScrollTo()
+                        composeTestRule.onNodeWithText("${j + 1}. ${answer.text}").assertHasClickAction()
                         composeTestRule
                             .onNodeWithTag(
                                 "Select answer ${j + 1} for question ${i + 1}",
@@ -108,7 +120,7 @@ class QuizFormScreenTest {
                     }
                 }
                 is Question.FillIn -> {
-                    composeTestRule.onNodeWithTag("Fill in answer for question ${i + 1}")
+                    composeTestRule.onNodeWithTag("Fill in answer for question ${i + 1}").assertExists()
                 }
             }
         }
@@ -116,10 +128,15 @@ class QuizFormScreenTest {
 
     @Test
     fun canSelectMultipleChoiceAnswer() {
+        val uiState = QuizFormUiState.Form(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            quiz = quiz,
+            responses = responses,
+        )
         composeTestRule.setContent {
             QuizFormScreen(
-                quiz,
-                responses,
+                uiState = uiState,
                 onSubmit = {})
         }
 
@@ -131,10 +148,15 @@ class QuizFormScreenTest {
 
     @Test
     fun canEditFillInAnswer() {
+        val uiState = QuizFormUiState.Form(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            quiz = quiz,
+            responses = responses,
+        )
         composeTestRule.setContent {
             QuizFormScreen(
-                quiz,
-                responses,
+                uiState = uiState,
                 onSubmit = {})
         }
 
@@ -150,15 +172,24 @@ class QuizFormScreenTest {
         val onSubmit = mockk<() -> Unit>()
         justRun { onSubmit() }
 
+        val uiState = QuizFormUiState.Form(
+            loading = LoadingState.NotStarted,
+            uploadStatus = LoadingState.NotStarted,
+            quiz = quiz,
+            responses = responses,
+        )
         composeTestRule.setContent {
             QuizFormScreen(
-                quiz,
-                responses,
+                uiState = uiState,
                 onSubmit = onSubmit
             )
         }
 
         composeTestRule.onNodeWithContentDescription("Submit responses").performClick()
+
+        // Confirm dialog
+        composeTestRule.onNodeWithText("Submit responses?", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Submit").performClick()
 
         verify(exactly = 1) { onSubmit() }
         confirmVerified(onSubmit)

@@ -84,6 +84,10 @@ class QuizListViewModel @Inject constructor(
 
     override val uiState by derivedStateOf { QuizListUiState.fromViewModelState(state) }
 
+    init {
+        refresh()
+    }
+
     /**
      * Refreshes the stored quiz list data.
      *
@@ -94,7 +98,6 @@ class QuizListViewModel @Inject constructor(
         if (state.screenIsBusy) {
             return
         }
-
         loadQuizzes()
     }
 
@@ -104,7 +107,10 @@ class QuizListViewModel @Inject constructor(
     private fun loadQuizzes() {
         refreshJob?.cancel()
 
-        state = state.copy(loading = LoadingState.InProgress)
+        state = state.copy(
+            loading = LoadingState.InProgress,
+            deleteQuizStatus = LoadingState.NotStarted
+        )
 
         refreshJob = viewModelScope.launch {
             userRepository.getQuizzes()

@@ -1,4 +1,4 @@
-package com.github.jtaylorsoftware.quizapp.ui.signup
+package com.github.jtaylorsoftware.quizapp.ui.signinsignup
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -9,15 +9,14 @@ import com.github.jtaylorsoftware.quizapp.auth.AuthenticationEventProducer
 import com.github.jtaylorsoftware.quizapp.data.domain.FailureReason
 import com.github.jtaylorsoftware.quizapp.data.domain.Result
 import com.github.jtaylorsoftware.quizapp.data.domain.UserAuthService
-import com.github.jtaylorsoftware.quizapp.data.domain.UserRegistrationErrors
-import com.github.jtaylorsoftware.quizapp.data.domain.models.UserRegistration
+import com.github.jtaylorsoftware.quizapp.data.domain.UserCredentialErrors
+import com.github.jtaylorsoftware.quizapp.data.domain.models.UserCredentials
 import com.github.jtaylorsoftware.quizapp.di.DefaultDispatcher
 import com.github.jtaylorsoftware.quizapp.ui.LoadingState
 import com.github.jtaylorsoftware.quizapp.ui.UiState
 import com.github.jtaylorsoftware.quizapp.ui.UiStateSource
 import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
 import com.github.jtaylorsoftware.quizapp.ui.isInProgress
-import com.github.jtaylorsoftware.quizapp.util.SimpleEmailValidator
 import com.github.jtaylorsoftware.quizapp.util.SimplePasswordValidator
 import com.github.jtaylorsoftware.quizapp.util.UsernameValidator
 import com.github.jtaylorsoftware.quizapp.util.WaitGroup
@@ -29,42 +28,39 @@ import kotlinx.coroutines.plus
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 
-data class SignupUiState(
-    /**
-     * `true` if user is signed in.
-     */
-    val registerStatus: LoadingState = LoadingState.NotStarted,
+data class SignInUiState(
     val usernameState: TextFieldState = TextFieldState(),
     val passwordState: TextFieldState = TextFieldState(),
-    val emailState: TextFieldState = TextFieldState(),
-): UiState {
-    override val loading: LoadingState = LoadingState.Success()
+    val loginStatus: LoadingState = LoadingState.NotStarted
+) : UiState {
+    override val loading: LoadingState = LoadingState.NotStarted
 
-    val screenIsBusy: Boolean = registerStatus.isInProgress
-    val hasErrors: Boolean = usernameState.error != null ||
-            emailState.error != null ||
-            passwordState.error != null
+    val hasErrors: Boolean = usernameState.error != null || passwordState.error != null
+
+    val screenIsBusy: Boolean = loginStatus.isInProgress
 }
 
 @HiltViewModel
-class SignupViewModel @Inject constructor(
+class SignInViewModel @Inject constructor(
     private val userAuthService: UserAuthService,
     private val authEventProducer: AuthenticationEventProducer,
     @DefaultDispatcher private val dispatcher: CoroutineDispatcher,
 ) : ViewModel(), UiStateSource {
 
-    // Used for waiting on validation to finish before doing signup
+    // Used for waiting on validation to finish before submitting login info
     private val waitGroup = WaitGroup(viewModelScope + dispatcher)
 
-    override var uiState by mutableStateOf(SignupUiState())
+    override var uiState by mutableStateOf(SignInUiState())
         private set
 
     init {
-        // Check if user is already signed in and can skip this screen
+        // Check if the user is already logged in locally
         val result = userAuthService.userIsSignedIn()
         if (result is Result.Success && result.value) {
-            uiState = uiState.copy(registerStatus = LoadingState.Success())
+            // User is already logged in
+            uiState = uiState.copy(loginStatus = LoadingState.Success())
 
+            // Produce "authenticated" event so that the login can be dismissed
             authEventProducer.onAuthenticated()
         }
     }
@@ -80,7 +76,13 @@ class SignupViewModel @Inject constructor(
                 dirty = true,
             )
         )
-        validateUsername(username)
+
+        viewModelScope.launch(dispatcher) {
+            // Do validation
+            waitGroup.add {
+                validateUsername(username)
+            }
+        }
     }
 
     fun setPassword(password: String) {
@@ -95,6 +97,7 @@ class SignupViewModel @Inject constructor(
             )
         )
 
+
         viewModelScope.launch(dispatcher) {
             // Do validation
             waitGroup.add {
@@ -103,37 +106,16 @@ class SignupViewModel @Inject constructor(
         }
     }
 
-    fun setEmail(email: String) {
+    fun login() {
         if (uiState.screenIsBusy) {
             return
         }
 
-        uiState = uiState.copy(
-            emailState = uiState.emailState.copy(
-                text = email,
-                dirty = true,
-            )
-        )
-
-        viewModelScope.launch(dispatcher) {
-            // Do validation
-            waitGroup.add {
-                validateEmail(email)
-            }
-        }
-    }
-
-    fun register() {
-        if (uiState.screenIsBusy) {
-            return
-        }
-
-        uiState = uiState.copy(registerStatus = LoadingState.InProgress)
+        uiState = uiState.copy(loginStatus = LoadingState.InProgress)
 
         viewModelScope.launch(dispatcher) {
             waitGroup.add {
                 validateUsername(uiState.usernameState.text)
-                validateEmail(uiState.emailState.text)
                 validatePassword(uiState.passwordState.text)
             }
 
@@ -146,35 +128,34 @@ class SignupViewModel @Inject constructor(
 
             if (uiState.hasErrors) {
                 uiState =
-                    uiState.copy(registerStatus = LoadingState.Error(FailureReason.FORM_HAS_ERRORS))
+                    uiState.copy(loginStatus = LoadingState.Error(FailureReason.FORM_HAS_ERRORS))
+
                 return@launch
             }
 
-            handleSignUpResult(
-                userAuthService.registerUser(
-                    UserRegistration(
-                        username = uiState.usernameState.text,
-                        email = uiState.emailState.text,
-                        password = uiState.passwordState.text
+            handleLoginResult(
+                userAuthService.signInUser(
+                    UserCredentials(
+                        uiState.usernameState.text,
+                        uiState.passwordState.text
                     )
                 )
             )
         }
     }
 
-    private fun handleSignUpResult(result: Result<Unit, UserRegistrationErrors>) {
+    private fun handleLoginResult(result: Result<Unit, UserCredentialErrors>) {
         when (result) {
             is Result.Success -> {
-                uiState = uiState.copy(registerStatus = LoadingState.Success())
+                uiState = uiState.copy(loginStatus = LoadingState.Success())
 
-                // Produce "authenticated" event so that the registration screen can be dismissed
+                // Produce "authenticated" event so that the login can be dismissed
                 authEventProducer.onAuthenticated()
             }
             is Result.Failure -> {
                 uiState = uiState.copy(
-                    registerStatus = LoadingState.Error(result.reason),
+                    loginStatus = LoadingState.Error(result.reason),
                     usernameState = uiState.usernameState.copy(error = result.errors?.username),
-                    emailState = uiState.emailState.copy(error = result.errors?.email),
                     passwordState = uiState.passwordState.copy(error = result.errors?.password)
                 )
             }
@@ -186,7 +167,8 @@ class SignupViewModel @Inject constructor(
             usernameState = uiState.usernameState.copy(
                 error = if (!UsernameValidator.validate(username)) {
                     "Username must be between 5 and 12 characters"
-                } else null
+                } else null,
+                dirty = true,
             ),
         )
     }
@@ -196,17 +178,8 @@ class SignupViewModel @Inject constructor(
             passwordState = uiState.passwordState.copy(
                 error = if (!SimplePasswordValidator.validate(password)) {
                     "Password must be between 8 and 20 characters"
-                } else null
-            ),
-        )
-    }
-
-    private fun validateEmail(email: String) {
-        uiState = uiState.copy(
-            emailState = uiState.emailState.copy(
-                error = if (!SimpleEmailValidator.validate(email)) {
-                    "Please input a valid email."
-                } else null
+                } else null,
+                dirty = true,
             ),
         )
     }

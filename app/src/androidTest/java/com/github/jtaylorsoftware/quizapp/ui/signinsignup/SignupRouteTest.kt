@@ -1,4 +1,4 @@
-package com.github.jtaylorsoftware.quizapp.ui.signup
+package com.github.jtaylorsoftware.quizapp.ui.signinsignup
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule

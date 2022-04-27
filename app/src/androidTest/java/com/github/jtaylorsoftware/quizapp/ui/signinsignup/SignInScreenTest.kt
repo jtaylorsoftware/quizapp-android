@@ -1,4 +1,4 @@
-package com.github.jtaylorsoftware.quizapp.ui.login
+package com.github.jtaylorsoftware.quizapp.ui.signinsignup
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -11,33 +11,32 @@ import org.junit.Rule
 import org.junit.Test
 
 
-class LoginScreenTest {
+class SignInScreenTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
     @Test
     fun showsLoginForm() {
-        val uiState = LoginUiState(
+        val uiState = SignInUiState(
             loginStatus = LoadingState.NotStarted,
             usernameState = TextFieldState(),
             passwordState = TextFieldState()
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                LoginScreen(uiState, {}, {}, {}, {})
+                SignInScreen(uiState, {}, {}, {}, {})
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Username").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Password").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Username").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Password").assertIsDisplayed()
         composeTestRule.onNodeWithText("Sign In").assertHasClickAction()
-        composeTestRule.onNodeWithText("Not registered?").assertIsDisplayed()
         composeTestRule.onNodeWithText("Sign Up").assertHasClickAction()
     }
 
     @Test
     fun canInputUserAndPass() {
-        val uiState = LoginUiState(
+        val uiState = SignInUiState(
             loginStatus = LoadingState.NotStarted,
             usernameState = TextFieldState(),
             passwordState = TextFieldState()
@@ -47,7 +46,7 @@ class LoginScreenTest {
 
         composeTestRule.setContent {
             QuizAppTheme {
-                LoginScreen(uiState, changeUser, changePass, {}, {})
+                SignInScreen(uiState, changeUser, changePass, {}, {})
             }
         }
 
@@ -59,8 +58,8 @@ class LoginScreenTest {
         val inputUser = "testuser"
         val inputPass = "password"
 
-        composeTestRule.onNodeWithContentDescription("Username").performTextInput(inputUser)
-        composeTestRule.onNodeWithContentDescription("Password").performTextInput(inputPass)
+        composeTestRule.onNodeWithText("Username").performTextInput(inputUser)
+        composeTestRule.onNodeWithText("Password").performTextInput(inputPass)
 
         assertEquals(inputUser, user.captured)
         assertEquals(inputPass, pass.captured)
@@ -68,7 +67,7 @@ class LoginScreenTest {
 
     @Test
     fun whenSignInButtonPressed_CallsLogin() {
-        val uiState = LoginUiState(
+        val uiState = SignInUiState(
             loginStatus = LoadingState.NotStarted,
             usernameState = TextFieldState(),
             passwordState = TextFieldState()
@@ -77,7 +76,7 @@ class LoginScreenTest {
 
         composeTestRule.setContent {
             QuizAppTheme {
-                LoginScreen(uiState, {}, {}, login, {})
+                SignInScreen(uiState, {}, {}, login, {})
             }
         }
 
@@ -91,7 +90,7 @@ class LoginScreenTest {
 
     @Test
     fun whenSignupTextPressed_CallsRegister() {
-        val uiState = LoginUiState(
+        val uiState = SignInUiState(
             loginStatus = LoadingState.NotStarted,
             usernameState = TextFieldState(),
             passwordState = TextFieldState()
@@ -100,7 +99,7 @@ class LoginScreenTest {
 
         composeTestRule.setContent {
             QuizAppTheme {
-                LoginScreen(uiState, {}, {}, login = {}, navigateToSignup = register)
+                SignInScreen(uiState, {}, {}, login = {}, navigateToSignup = register)
             }
         }
 
@@ -114,14 +113,14 @@ class LoginScreenTest {
 
     @Test
     fun whenStateHasErrors_StateDisplaysErrorMessages() {
-        val uiState = LoginUiState(
+        val uiState = SignInUiState(
             loginStatus = LoadingState.NotStarted,
             usernameState = TextFieldState(error = "Username taken", dirty = true),
             passwordState = TextFieldState(error = "Password too short", dirty = true)
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                LoginScreen(uiState, {}, {}, {}, {})
+                SignInScreen(uiState, {}, {}, {}, {})
             }
         }
 
@@ -131,14 +130,14 @@ class LoginScreenTest {
 
     @Test
     fun buttonDisplaysProgressIndicator_whenLoadingInProgress() {
-        val uiState = LoginUiState(
+        val uiState = SignInUiState(
             loginStatus = LoadingState.InProgress,
             usernameState = TextFieldState(),
             passwordState = TextFieldState()
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                LoginScreen(uiState, {}, {}, {}, {})
+                SignInScreen(uiState, {}, {}, {}, {})
             }
         }
 

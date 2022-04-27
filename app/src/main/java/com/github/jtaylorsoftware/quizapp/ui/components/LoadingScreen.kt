@@ -2,6 +2,7 @@ package com.github.jtaylorsoftware.quizapp.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Surface
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
@@ -29,22 +30,20 @@ fun LoadingScreen(
     spacerHeight: Dp = 16.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Surface {
-        Column(
-            Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            CircularProgressIndicator(Modifier.semantics {
-                contentDescription = "Loading in progress"
-            })
-            Spacer(
-                Modifier
-                    .height(spacerHeight)
-                    .fillMaxWidth()
-            )
-            content()
-        }
+    Column(
+        Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator(Modifier.semantics {
+            contentDescription = "Loading in progress"
+        })
+        Spacer(
+            Modifier
+                .height(spacerHeight)
+                .fillMaxWidth()
+        )
+        content()
     }
 }
 
@@ -53,8 +52,10 @@ fun LoadingScreen(
 @Composable
 private fun LoadingScreenPreview() {
     QuizAppTheme {
-        LoadingScreen {
-            Text("Loading your content")
+        Surface(color = MaterialTheme.colors.background) {
+            LoadingScreen {
+                Text("Loading your content")
+            }
         }
     }
 }

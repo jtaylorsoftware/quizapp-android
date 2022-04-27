@@ -1,29 +1,40 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.*
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.R
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
 import com.github.jtaylorsoftware.quizapp.data.domain.models.QuizListing
+import com.github.jtaylorsoftware.quizapp.ui.LoadingState
+import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
 import com.github.jtaylorsoftware.quizapp.util.describeMax
 import com.github.jtaylorsoftware.quizapp.util.isInPast
 import com.github.jtaylorsoftware.quizapp.util.periodBetweenNow
+import com.google.accompanist.flowlayout.FlowCrossAxisAlignment
+import com.google.accompanist.flowlayout.FlowMainAxisAlignment
+import com.google.accompanist.flowlayout.FlowRow
+import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.util.*
 
 /**
  * Displays the signed-in user's list of created quizzes, in [QuizListing] format.
@@ -43,14 +54,14 @@ fun QuizListScreen(
     onDeleteQuiz: (ObjectId) -> Unit,
     navigateToEditor: (ObjectId?) -> Unit,
     navigateToResults: (ObjectId) -> Unit,
+    scaffoldState: ScaffoldState = rememberScaffoldState(),
+    maxWidthDp: Dp = LocalConfiguration.current.screenWidthDp.dp,
 ) {
-    LazyColumn(Modifier.fillMaxWidth()) {
-        item {
-            Text("Your Quizzes")
-        }
-
-        items(uiState.data, key = { it.id.value }) { quiz ->
-            QuizListItem(quiz, onDeleteQuiz, navigateToEditor, navigateToResults)
+    ProfileList {
+        items(uiState.data, key = { it.id.value }) {
+            ProfileListCard(Modifier.width(maxWidthDp)) {
+                QuizListItem(it, onDeleteQuiz, navigateToEditor, navigateToResults, scaffoldState)
+            }
         }
     }
 }
@@ -64,53 +75,168 @@ fun QuizListScreen(
  * @param navigateToEditor Callback invoked when the user presses the "Edit" button.
  * @param navigateToResults Callback invoked when the user presses the "View Results" button.
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalTextApi::class)
 @Composable
 private fun QuizListItem(
     quiz: QuizListing,
     onDeleteQuiz: (ObjectId) -> Unit,
     navigateToEditor: (ObjectId?) -> Unit,
-    navigateToResults: (ObjectId) -> Unit
+    navigateToResults: (ObjectId) -> Unit,
+    scaffoldState: ScaffoldState = rememberScaffoldState(),
 ) {
-    val questionNoun = rememberCapitalizedNoun(quiz.questionCount, "question", "questions")
-    val responseNoun = rememberCapitalizedNoun(quiz.resultsCount, "response", "responses")
-    val clipboardManager = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
 
-    Box {
-        Column {
-            // Title     [Delete] [Edit] [Results]
-            Row {
-                Text("\"${quiz.title}\"")
-                IconButton(onClick = { onDeleteQuiz(quiz.id) }) {
-                    Icon(Icons.Default.Delete, "Delete Quiz", tint = MaterialTheme.colors.error)
-                }
-                IconButton(onClick = { navigateToEditor(quiz.id) }) {
-                    Icon(Icons.Default.Edit, "Edit Quiz", tint = MaterialTheme.colors.secondary)
-                }
-                IconButton(onClick = { navigateToResults(quiz.id) }) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_assessment_24),
-                        "View Results",
-                        tint = MaterialTheme.colors.secondaryVariant
-                    )
-                }
+    QuizTitle(
+        title = quiz.title,
+        onDelete = {
+            scope.launch {
+                scaffoldState.snackbarHostState.showSnackbar(
+                    "Deleted quiz \"${quiz.title.truncated()}\""
+                )
             }
-            Text("${quiz.questionCount} $questionNoun")
-            Text("${quiz.resultsCount} $responseNoun")
-            Text("Link: ")
-            Text(
-                "quizzes/${quiz.id.value}",
-                modifier = Modifier.combinedClickable(
-                    onClick = { navigateToResults(quiz.id) },
-                    onLongClick = {
-                        clipboardManager.setText(AnnotatedString("http://makequizzes.online/quizzes/${quiz.id.value}"))
-                    }),
-                color = MaterialTheme.colors.secondary
+            onDeleteQuiz(quiz.id)
+        },
+        onEdit = { navigateToEditor(quiz.id) },
+        onViewResults = { navigateToResults(quiz.id) }
+    )
+    Text(
+        "${quiz.questionCount} questions",
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+    Text(
+        "${quiz.resultsCount} responses",
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
+    QuizLinkText(quiz.id, scaffoldState)
+    Row(
+        Modifier
+            .height(IntrinsicSize.Min)
+            .padding(bottom = 4.dp)
+    ) {
+        CreationTimestamp(quiz.date)
+        Spacer(Modifier.weight(1.0f, fill = true))
+        Expiration(quiz.expiration)
+    }
+}
+
+@Composable
+private fun QuizTitle(
+    title: String,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit,
+    onViewResults: () -> Unit
+) {
+    // Show title and buttons at top, in one line if possible
+    FlowRow(
+        Modifier
+            .padding(bottom = 8.dp)
+            .fillMaxWidth(),
+        mainAxisAlignment = FlowMainAxisAlignment.SpaceBetween,
+        crossAxisSpacing = 8.dp,
+        crossAxisAlignment = FlowCrossAxisAlignment.Center
+    ) {
+        Text(
+            title,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.h6
+        )
+        IconButtonRow(
+            quizTitle = title,
+            onDelete = onDelete,
+            onEdit = onEdit,
+            onViewResults = onViewResults
+        )
+    }
+}
+
+/**
+ * Truncates a [String] to a maximum of [maxLength] characters, replacing overflow with
+ * ellipses. The ellipses are counted against the maximum length.
+ */
+private fun String.truncated(maxLength: Int = 12): String {
+    val overflow = "..."
+    val minLengthToOverflow = maxLength - overflow.length
+    return if (length <= maxLength) {
+        this
+    } else {
+        replaceRange(minLengthToOverflow until length, overflow)
+    }
+}
+
+@Preview(widthDp = 320)
+@Composable
+private fun QuizListItemPreview() {
+    val listing = QuizListing(
+        resultsCount = 1,
+        questionCount = 1,
+        title = "My Quiz".repeat(10),
+    )
+    QuizAppTheme {
+        Surface {
+            Column {
+                QuizListItem(
+                    quiz = listing,
+                    onDeleteQuiz = {},
+                    navigateToEditor = {},
+                    navigateToResults = {})
+            }
+        }
+    }
+}
+
+/**
+ * The row of delete, edit, and "view results" buttons to display next to the quiz title.
+ */
+@Composable
+private fun IconButtonRow(
+    quizTitle: String,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit,
+    onViewResults: () -> Unit,
+) {
+    var dialogOpen by rememberSaveable { mutableStateOf(false) }
+
+    // Show dialog to prevent accidental deletion of quiz
+    if (dialogOpen) {
+        AlertDialog(
+            onDismissRequest = { dialogOpen = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dialogOpen = false
+                    onDelete()
+                }) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { dialogOpen = false }) {
+                    Text("Cancel")
+                }
+            },
+            text = { Text("Delete quiz \"$quizTitle\"? This cannot be undone.") },
+        )
+    }
+
+    Row(horizontalArrangement = Arrangement.End) {
+        IconButton(
+            onClick = { dialogOpen = true },
+        ) {
+            Icon(Icons.Default.Delete, "Delete Quiz", tint = MaterialTheme.colors.error)
+        }
+        IconButton(
+            onClick = onEdit,
+        ) {
+            Icon(Icons.Default.Edit, "Edit Quiz", tint = MaterialTheme.colors.secondary)
+        }
+        IconButton(
+            onClick = onViewResults,
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_assessment_24),
+                "View Results",
+                tint = MaterialTheme.colors.secondaryVariant
             )
-            Row {
-                CreationTimestamp(quiz.date)
-                Expiration(quiz.expiration)
-            }
         }
     }
 }
@@ -132,8 +258,56 @@ private fun CreationTimestamp(date: Instant) {
     CompositionLocalProvider(
         LocalContentAlpha provides ContentAlpha.medium
     ) {
-        Text("Created $timestamp")
+        Text("Created $timestamp", style = MaterialTheme.typography.caption)
     }
+}
+
+/**
+ * Displays the text that the user can click to copy the link to the quiz form.
+ */
+@Composable
+private fun QuizLinkText(quizId: ObjectId, scaffoldState: ScaffoldState = rememberScaffoldState()) {
+    val clipboardManager = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+
+    // The actual link to copy to clipboard
+    val quizLink =
+        remember { AnnotatedString("http://makequizzes.online/quizzes/${quizId.value}") }
+
+    // The styled text to present to the user
+    val quizLinkStyledText = run {
+        val linkColor = MaterialTheme.colors.onSurface
+        val clickableLinkColor = MaterialTheme.colors.secondary
+        remember {
+            buildAnnotatedString {
+                withStyle(SpanStyle(linkColor)) {
+                    append("Link: ")
+                }
+                withStyle(
+                    SpanStyle(
+                        clickableLinkColor,
+                        textDecoration = TextDecoration.Underline
+                    )
+                ) {
+                    append("quizzes/${quizId.value}")
+                }
+            }
+        }
+    }
+
+    ClickableText(
+        quizLinkStyledText,
+        modifier = Modifier.padding(bottom = 8.dp),
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        onClick = { offset ->
+            if (offset > "Link: ".length) {
+                clipboardManager.setText(quizLink)
+                scope.launch {
+                    scaffoldState.snackbarHostState.showSnackbar("Copied quiz link to clipboard")
+                }
+            }
+        })
 }
 
 /**
@@ -145,20 +319,41 @@ private fun CreationTimestamp(date: Instant) {
 private fun Expiration(expiration: Instant) {
     val expired: Boolean by remember { derivedStateOf { expiration.isInPast() } }
     if (expired) {
-        Text("Expired", color = MaterialTheme.colors.error)
+        Text(
+            "Expired",
+            modifier = Modifier.padding(end = 12.dp), // Line up with row of IconButton
+            color = MaterialTheme.colors.error,
+            style = MaterialTheme.typography.caption
+        )
     }
 }
 
-/**
- * Computes and remembers the correct form of a noun and returns it with the first letter capitalized.
- *
- * @param count The number of the noun that exists.
- * @param singular The singular form of the noun.
- * @param plural The plural form of the noun.
- */
+@Preview
 @Composable
-private fun rememberCapitalizedNoun(count: Int, singular: String, plural: String): String {
-    val noun: String by remember { derivedStateOf { if (count == 1) singular else plural } }
-    val capitalizedNoun: String by remember { derivedStateOf { noun.replaceFirstChar { it.uppercase() } } }
-    return capitalizedNoun
+private fun QuizListScreenPreview() {
+    val uiState = QuizListUiState.QuizList(
+        loading = LoadingState.NotStarted,
+        deleteQuizStatus = LoadingState.NotStarted,
+        data = (0..3).map {
+            QuizListing(
+                id = ObjectId(UUID.randomUUID().toString()),
+                resultsCount = it,
+                questionCount = it,
+                title = "My Quiz ${it + 1}",
+                date = Instant.now().minus(3, ChronoUnit.DAYS),
+                expiration = Instant.now().minus((it + 1).toLong(), ChronoUnit.DAYS),
+            )
+        }
+    )
+    QuizAppTheme {
+        Surface {
+            QuizListScreen(
+                uiState = uiState,
+                onDeleteQuiz = {},
+                navigateToEditor = {},
+                navigateToResults = {},
+                maxWidthDp = LocalConfiguration.current.screenWidthDp.dp
+            )
+        }
+    }
 }

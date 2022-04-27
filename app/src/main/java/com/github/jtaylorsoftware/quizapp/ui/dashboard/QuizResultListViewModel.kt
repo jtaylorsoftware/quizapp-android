@@ -130,6 +130,10 @@ class QuizResultListViewModel @Inject constructor(
 //        }
 //    }
 
+    init {
+        refresh()
+    }
+
     /**
      * Refreshes the stored quiz result list data.
      *

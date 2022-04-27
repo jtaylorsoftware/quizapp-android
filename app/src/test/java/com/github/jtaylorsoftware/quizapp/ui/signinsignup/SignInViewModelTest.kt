@@ -1,4 +1,4 @@
-package com.github.jtaylorsoftware.quizapp.ui.signup
+package com.github.jtaylorsoftware.quizapp.ui.signinsignup
 
 import com.github.jtaylorsoftware.quizapp.auth.AuthenticationState
 import com.github.jtaylorsoftware.quizapp.auth.FakeAuthStateManager
@@ -24,13 +24,13 @@ import org.junit.Before
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
-class SignupViewModelTest {
+class SignInViewModelTest {
     private lateinit var userCache: FakeUserCache
     private lateinit var networkSource: FakeUserNetworkSource
     private lateinit var service: UserAuthService
-    private lateinit var viewModel: SignupViewModel
+    private lateinit var viewModel: SignInViewModel
     private lateinit var authStateManager: FakeAuthStateManager
-
+    
     @Before
     fun beforeEach() {
         Dispatchers.setMain(StandardTestDispatcher())
@@ -38,7 +38,7 @@ class SignupViewModelTest {
         networkSource = FakeUserNetworkSource()
         service = FakeUserAuthService(userCache, networkSource)
         authStateManager = FakeAuthStateManager()
-        viewModel = SignupViewModel(service, authStateManager, Dispatchers.Main)
+        viewModel = SignInViewModel(service, authStateManager, Dispatchers.Main)
     }
 
     @After
@@ -88,10 +88,11 @@ class SignupViewModelTest {
     }
 
     @Test
-    fun `setPassword updates the uiState username text value`() = runTest {
+    fun `setPassword updates the uiState password text value`() = runTest {
         val password = "password123"
         viewModel.setPassword(password)
         advanceUntilIdle()
+
         assertThat(
             viewModel.uiState.passwordState.text,
             `is`(password)
@@ -120,137 +121,42 @@ class SignupViewModelTest {
     }
 
     @Test
-    fun `setEmail updates the uiState email text value`() = runTest {
-        val email = "email@example.com"
-        viewModel.setEmail(email)
-        advanceUntilIdle()
-        val text = viewModel.uiState.emailState.text
-        assertThat(text, `is`(email))
-    }
-
-    @Test
-    fun `setEmail validates the email`() = runTest {
-        // Empty
-        var email = ""
-        viewModel.setEmail(email)
-        advanceUntilIdle()
-        assertThat(
-            viewModel.uiState.emailState.error,
-            `is`(notNullValue())
-        )
-
-        // Not email
-        email = "alsdf345kal@"
-        viewModel.setEmail(email)
-        advanceUntilIdle()
-        assertThat(
-            viewModel.uiState.emailState.error,
-            `is`(notNullValue())
-        )
-    }
-
-    @Test
-    fun `register does nothing when ui has errors`() = runTest {
+    fun `login does nothing when ui has errors`() = runTest {
         // Only user has errors
         viewModel.setUsername("!@#dsfsdf")
-        viewModel.setPassword("password")
-        viewModel.setEmail("email@example.com")
+        viewModel.login()
         advanceUntilIdle()
-
-        viewModel.register()
-        advanceUntilIdle()
-
         assertThat(
-            viewModel.uiState.registerStatus,
+            viewModel.uiState.loginStatus,
             IsInstanceOf(LoadingState.Error::class.java)
+        )
+        assertThat(
+            viewModel.uiState.usernameState.error,
+            `is`(notNullValue())
         )
 
         // Only pass has errors
         viewModel.setUsername("validuser")
         viewModel.setPassword("a".repeat(21))
-        viewModel.setEmail("email@example.com")
+        viewModel.login()
         advanceUntilIdle()
-
-        viewModel.register()
-        advanceUntilIdle()
-
         assertThat(
-            viewModel.uiState.registerStatus,
+            viewModel.uiState.loginStatus,
             IsInstanceOf(LoadingState.Error::class.java)
         )
+        assertThat(
+            viewModel.uiState.passwordState.error,
+            `is`(notNullValue())
+        )
+
 
         // Both have errors
         viewModel.setUsername("!@#32fads")
         viewModel.setPassword("a".repeat(21))
-        advanceUntilIdle()
-
-        viewModel.register()
+        viewModel.login()
         advanceUntilIdle()
         assertThat(
-            viewModel.uiState.registerStatus,
-            IsInstanceOf(LoadingState.Error::class.java)
-        )
-    }
-
-    @Test
-    fun `register sets validates state again before doing register`() = runTest {
-        // Neither has a value, so both should be error because empty
-        viewModel.register()
-        advanceUntilIdle()
-        assertThat(
-            viewModel.uiState.registerStatus,
-            IsInstanceOf(LoadingState.Error::class.java)
-        )
-    }
-
-    @Test
-    fun `register sets uiState loading flag before doing register`() = runTest {
-        val mockService = spyk(service)
-        coEvery { mockService.registerUser(any()) } coAnswers {
-            delay(1000)
-            Result.success()
-        }
-        viewModel = SignupViewModel(mockService, authStateManager, Dispatchers.Main)
-
-        viewModel.setUsername("username")
-        viewModel.setPassword("password")
-        viewModel.setEmail("email@example.com")
-        advanceUntilIdle()
-
-        viewModel.register()
-        advanceTimeBy(100)
-        assertThat(
-            viewModel.uiState.registerStatus,
-            IsInstanceOf(LoadingState.InProgress::class.java)
-        )
-    }
-
-    @Test
-    fun `register sets registerStatus to Success and notifies AuthStateManager on success`() =
-        runTest {
-            viewModel.setUsername("username")
-            viewModel.setEmail("email@example.com")
-            viewModel.setPassword("password")
-            viewModel.register()
-            advanceUntilIdle()
-            assertThat(authStateManager.state, IsInstanceOf(AuthenticationState.Authenticated::class.java))
-            assertThat(viewModel.uiState.registerStatus, IsInstanceOf(LoadingState.Success::class.java))
-        }
-
-    @Test
-    fun `register sets uiState errors when service fails with HTTP Bad Request`() = runTest {
-        viewModel.setUsername("username")
-        viewModel.setEmail("email@example.com")
-        viewModel.setPassword("password")
-        advanceUntilIdle()
-
-        networkSource.failOnNextWith(NetworkResult.HttpError(400))
-
-        viewModel.register()
-        advanceUntilIdle()
-
-        assertThat(
-            viewModel.uiState.registerStatus,
+            viewModel.uiState.loginStatus,
             IsInstanceOf(LoadingState.Error::class.java)
         )
         assertThat(
@@ -264,35 +170,99 @@ class SignupViewModelTest {
     }
 
     @Test
-    fun `register sets uiState errors when service fails because of network error`() = runTest {
-        viewModel.setUsername("username")
-        viewModel.setEmail("email@example.com")
-        viewModel.setPassword("password")
-        advanceUntilIdle()
-
-        networkSource.failOnNextWith(NetworkResult.NetworkError(IllegalArgumentException()))
-        viewModel.register()
+    fun `login sets validates state again before doing login`() = runTest {
+        // Neither has a value, so both should be error because empty
+        viewModel.login()
         advanceUntilIdle()
 
         assertThat(
-            viewModel.uiState.registerStatus,
+            viewModel.uiState.loginStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
+        )
+        assertThat(
+            viewModel.uiState.usernameState.error,
+            `is`(notNullValue())
+        )
+        assertThat(
+            viewModel.uiState.passwordState.error,
+            `is`(notNullValue())
+        )
+    }
+
+    @Test
+    fun `login sets uiState loading flag before doing login`() = runTest {
+        val mockService = spyk(service)
+        coEvery { mockService.signInUser(any()) } coAnswers {
+            delay(1000)
+            Result.success()
+        }
+
+        viewModel = SignInViewModel(mockService, authStateManager, Dispatchers.Main)
+
+        viewModel.setUsername("username")
+        viewModel.setPassword("password")
+
+        viewModel.login()
+
+        runCurrent()
+        assertThat(
+            viewModel.uiState.loginStatus,
+            IsInstanceOf(LoadingState.InProgress::class.java)
+        )
+    }
+
+    @Test
+    fun `login notifies AuthStateManager after successful login`() = runTest {
+        viewModel.setUsername("username")
+        viewModel.setPassword("password")
+        viewModel.login()
+        advanceUntilIdle()
+        assertThat(authStateManager.state, IsInstanceOf(AuthenticationState.Authenticated::class.java))
+    }
+
+    @Test
+    fun `login sets uiState errors when service fails with HTTP Bad Request`() = runTest {
+        viewModel.setUsername("username")
+        viewModel.setPassword("password")
+        networkSource.failOnNextWith(NetworkResult.HttpError(400))
+        viewModel.login()
+        advanceUntilIdle()
+        assertThat(
+            viewModel.uiState.loginStatus,
+            IsInstanceOf(LoadingState.Error::class.java)
+        )
+        assertThat(
+            viewModel.uiState.usernameState.error,
+            `is`(notNullValue())
+        )
+        assertThat(
+            viewModel.uiState.passwordState.error,
+            `is`(notNullValue())
+        )
+    }
+
+    @Test
+    fun `login sets uiState errors when service fails because of network error`() = runTest {
+        viewModel.setUsername("username")
+        viewModel.setPassword("password")
+        networkSource.failOnNextWith(NetworkResult.NetworkError(IllegalArgumentException()))
+        viewModel.login()
+        advanceUntilIdle()
+        assertThat(
+            viewModel.uiState.loginStatus,
             IsInstanceOf(LoadingState.Error::class.java)
         )
     }
 
     @Test
-    fun `register sets uiState errors when service fails because of unknown error`() = runTest {
+    fun `login sets uiState errors when service fails because of unknown error`() = runTest {
         viewModel.setUsername("username")
-        viewModel.setEmail("email@example.com")
         viewModel.setPassword("password")
-        advanceUntilIdle()
-
         networkSource.failOnNextWith(NetworkResult.Unknown(IllegalArgumentException()))
-        viewModel.register()
+        viewModel.login()
         advanceUntilIdle()
-
         assertThat(
-            viewModel.uiState.registerStatus,
+            viewModel.uiState.loginStatus,
             IsInstanceOf(LoadingState.Error::class.java)
         )
     }

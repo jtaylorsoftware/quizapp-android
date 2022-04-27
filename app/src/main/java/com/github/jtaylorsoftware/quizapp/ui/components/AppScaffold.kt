@@ -3,32 +3,20 @@ package com.github.jtaylorsoftware.quizapp.ui.components
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import com.github.jtaylorsoftware.quizapp.ui.LoadingState
-import com.github.jtaylorsoftware.quizapp.ui.UiState
 
 /**
- * Displays [content] in a [Scaffold] and handles updating the screen with Snackbars based on a [UiState].
+ * Provides the [Scaffold] design to use across the app, with a custom
  */
 @Composable
 fun AppScaffold(
-    scaffoldState: ScaffoldState,
-    uiState: UiState,
     modifier: Modifier = Modifier,
+    scaffoldState: ScaffoldState,
     floatingActionButton: @Composable () -> Unit = {},
     topBar: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit
 ) {
-    if (uiState.loading is LoadingState.Error) {
-        LaunchedEffect(scaffoldState.snackbarHostState) {
-            scaffoldState.snackbarHostState.showSnackbar(
-                message = (uiState.loading as LoadingState.Error).message.value
-            )
-        }
-    }
-
     Scaffold(
         modifier = modifier,
         scaffoldState = scaffoldState,
@@ -40,6 +28,9 @@ fun AppScaffold(
                 Snackbar(
                     snackbarData = snackbarData,
                     backgroundColor = MaterialTheme.colors.surface,
+
+                    // Show all snackbars with "error" text color, as that is the primary use case
+                    // TODO - Dynamically change based on type of message?
                     contentColor = MaterialTheme.colors.error
                 )
             }

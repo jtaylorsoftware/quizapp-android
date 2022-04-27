@@ -2,24 +2,30 @@ package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.dp
 import com.github.jtaylorsoftware.quizapp.data.domain.models.User
 import com.github.jtaylorsoftware.quizapp.ui.LoadingState
+import com.github.jtaylorsoftware.quizapp.ui.WindowSizeClass
 import com.github.jtaylorsoftware.quizapp.ui.components.TextFieldState
 import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
-import io.mockk.*
+import io.mockk.confirmVerified
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 import org.junit.Rule
 import org.junit.Test
 
-class ProfileEditorScreenTest {
+class ProfileSettingsTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
     @Test
     fun shouldDisplayContent() {
         val email = "user123@email.com"
-        val uiState = ProfileUiState.Editor(
+        val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
             data = User(email = email),
+            settingsOpen = true,
             emailState = TextFieldState(text = email),
             passwordState = TextFieldState(),
             submitEmailStatus = LoadingState.NotStarted,
@@ -27,14 +33,15 @@ class ProfileEditorScreenTest {
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileEditorScreen(
-                    uiState,
+                ProfileSettingsDialog(
+                    uiState = uiState,
+                    onClose = {},
                     onChangeEmail = {},
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = {},
-                    onClose = {},
-                    onLogOut = {},
+                    maxWidthDp = 480.dp,
+                    windowSizeClass = WindowSizeClass.Compact
                 )
             }
         }
@@ -52,44 +59,11 @@ class ProfileEditorScreenTest {
     }
 
     @Test
-    fun logOutButton_whenClicked_callsLogOut() {
-        val uiState = ProfileUiState.Editor(
-            loading = LoadingState.NotStarted,
-            data = User(),
-            emailState = TextFieldState(),
-            passwordState = TextFieldState(),
-            submitEmailStatus = LoadingState.NotStarted,
-            submitPasswordStatus = LoadingState.NotStarted
-        )
-        val logOut = mockk<()->Unit>()
-        justRun { logOut() }
-
-        composeTestRule.setContent {
-            QuizAppTheme {
-                ProfileEditorScreen(
-                    uiState,
-                    onChangeEmail = {},
-                    onChangePassword = {},
-                    onSubmitEmail = {},
-                    onSubmitPassword = {},
-                    onClose = {},
-                    onLogOut = logOut,
-                )
-            }
-        }
-
-        composeTestRule.onNodeWithText("Log out").performClick()
-        verify(exactly = 1){
-            logOut()
-        }
-        confirmVerified(logOut)
-    }
-
-    @Test
     fun changeEmail_whenClicked_changesTextToField() {
         val email = "user123@email.com"
-        val uiState = ProfileUiState.Editor(
+        val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
+            settingsOpen = true,
             data = User(email = email),
             emailState = TextFieldState(text = email),
             passwordState = TextFieldState(),
@@ -98,14 +72,15 @@ class ProfileEditorScreenTest {
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileEditorScreen(
-                    uiState,
+                ProfileSettingsDialog(
+                    uiState = uiState,
+                    onClose = {},
                     onChangeEmail = {},
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = {},
-                    onClose = {},
-                    onLogOut = {},
+                    maxWidthDp = 480.dp,
+                    windowSizeClass = WindowSizeClass.Compact
                 )
             }
         }
@@ -113,9 +88,8 @@ class ProfileEditorScreenTest {
         // Do click
         composeTestRule.onNodeWithText("Change Email").performClick()
 
-        // Should now be a field
-        composeTestRule.onNodeWithText("Email: $email").assertDoesNotExist()
-        composeTestRule.onNodeWithText(email).assertIsDisplayed()
+        // Should show a field that can take text input
+        composeTestRule.onNodeWithText(email).performTextInput("test@example.com")
 
         // Should have cancel and confirm
         composeTestRule.onNodeWithText("Cancel").assertHasClickAction()
@@ -125,9 +99,10 @@ class ProfileEditorScreenTest {
     @Test
     fun submitEmailButton_whenSubmitStatusInProgress_displaysSpinner() {
         val email = "user123@email.com"
-        val uiState = ProfileUiState.Editor(
+        val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
             data = User(email = email),
+            settingsOpen = true,
             emailState = TextFieldState(text = email),
             passwordState = TextFieldState(),
             submitEmailStatus = LoadingState.InProgress,
@@ -135,14 +110,15 @@ class ProfileEditorScreenTest {
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileEditorScreen(
-                    uiState,
+                ProfileSettingsDialog(
+                    uiState = uiState,
+                    onClose = {},
                     onChangeEmail = {},
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = {},
-                    onClose = {},
-                    onLogOut = {},
+                    maxWidthDp = 480.dp,
+                    windowSizeClass = WindowSizeClass.Compact
                 )
             }
         }
@@ -150,15 +126,11 @@ class ProfileEditorScreenTest {
         // Do click
         composeTestRule.onNodeWithText("Change Email").performClick()
 
-        // Should now be a field
-        composeTestRule.onNodeWithText("Email: $email").assertDoesNotExist()
-        composeTestRule.onNodeWithText(email).assertIsDisplayed()
-
         // Cancel should be disabled
         composeTestRule.onNodeWithText("Cancel").assertIsNotEnabled()
 
         // Submit should be spinner
-        composeTestRule.onNodeWithContentDescription("Change email in progress").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Change Email is in progress").assertIsDisplayed()
     }
 
     @Test
@@ -169,9 +141,10 @@ class ProfileEditorScreenTest {
         var emailState = TextFieldState(text = email)
         val onChangeEmail: (String) -> Unit = { emailState = TextFieldState(text = it, dirty = true) }
 
-        val uiState = ProfileUiState.Editor(
+        val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
             data = User(email = email),
+            settingsOpen = true,
             emailState = emailState,
             passwordState = TextFieldState(),
             submitEmailStatus = LoadingState.NotStarted,
@@ -179,14 +152,15 @@ class ProfileEditorScreenTest {
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileEditorScreen(
-                    uiState,
+                ProfileSettingsDialog(
+                    uiState = uiState,
+                    onClose = {},
                     onChangeEmail = onChangeEmail,
                     onChangePassword = {},
                     onSubmitEmail = submit,
                     onSubmitPassword = {},
-                    onClose = {},
-                    onLogOut = {},
+                    maxWidthDp = 480.dp,
+                    windowSizeClass = WindowSizeClass.Compact
                 )
             }
         }
@@ -220,9 +194,10 @@ class ProfileEditorScreenTest {
         var emailState = TextFieldState(text = email)
         val onChangeEmail: (String) -> Unit = { emailState = TextFieldState(text = it, dirty = true) }
 
-        val uiState = ProfileUiState.Editor(
+        val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
             data = User(email = email),
+            settingsOpen = true,
             emailState = emailState,
             passwordState = TextFieldState(),
             submitEmailStatus = LoadingState.NotStarted,
@@ -230,14 +205,15 @@ class ProfileEditorScreenTest {
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileEditorScreen(
-                    uiState,
+                ProfileSettingsDialog(
+                    uiState = uiState,
+                    onClose = {},
                     onChangeEmail = onChangeEmail,
                     onChangePassword = {},
                     onSubmitEmail = submit,
                     onSubmitPassword = {},
-                    onClose = {},
-                    onLogOut = {},
+                    maxWidthDp = 480.dp,
+                    windowSizeClass = WindowSizeClass.Compact
                 )
             }
         }
@@ -258,9 +234,10 @@ class ProfileEditorScreenTest {
 
     @Test
     fun changePassword_whenClicked_showsForm() {
-        val uiState = ProfileUiState.Editor(
+        val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
             data = User(),
+            settingsOpen = true,
             emailState = TextFieldState(),
             passwordState = TextFieldState(),
             submitEmailStatus = LoadingState.NotStarted,
@@ -268,14 +245,15 @@ class ProfileEditorScreenTest {
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileEditorScreen(
-                    uiState,
+                ProfileSettingsDialog(
+                    uiState = uiState,
+                    onClose = {},
                     onChangeEmail = {},
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = {},
-                    onClose = {},
-                    onLogOut = {},
+                    maxWidthDp = 480.dp,
+                    windowSizeClass = WindowSizeClass.Compact
                 )
             }
         }
@@ -283,8 +261,8 @@ class ProfileEditorScreenTest {
         composeTestRule.onNodeWithText("Change Password").performClick()
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithContentDescription("Password").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Confirm Password", ignoreCase = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Password").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Confirm Password", ignoreCase = true).assertIsDisplayed()
 
         composeTestRule.onNodeWithText("Cancel").assertIsDisplayed()
         composeTestRule.onNodeWithText("Submit").assertIsDisplayed()
@@ -292,9 +270,10 @@ class ProfileEditorScreenTest {
 
     @Test
     fun submitPasswordButton_whenSubmitStatusInProgress_displaysSpinner() {
-        val uiState = ProfileUiState.Editor(
+        val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
             data = User(),
+            settingsOpen = true,
             emailState = TextFieldState(),
             passwordState = TextFieldState(),
             submitEmailStatus = LoadingState.NotStarted,
@@ -302,14 +281,15 @@ class ProfileEditorScreenTest {
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileEditorScreen(
-                    uiState,
+                ProfileSettingsDialog(
+                    uiState = uiState,
+                    onClose = {},
                     onChangeEmail = {},
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = {},
-                    onClose = {},
-                    onLogOut = {},
+                    maxWidthDp = 480.dp,
+                    windowSizeClass = WindowSizeClass.Compact
                 )
             }
         }
@@ -317,14 +297,14 @@ class ProfileEditorScreenTest {
         composeTestRule.onNodeWithText("Change Password").performClick()
         composeTestRule.waitForIdle()
 
-        composeTestRule.onNodeWithContentDescription("Password").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Confirm Password", ignoreCase = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Password").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Confirm Password", ignoreCase = true).assertIsDisplayed()
 
         // Cancel should be disabled
         composeTestRule.onNodeWithText("Cancel").assertIsNotEnabled()
 
         // Submit should be spinner
-        composeTestRule.onNodeWithContentDescription("Change password in progress").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Change Password is in progress").assertIsDisplayed()
     }
 
     @Test
@@ -332,9 +312,10 @@ class ProfileEditorScreenTest {
         val submit = mockk<() -> Unit>()
         every { submit() } returns Unit
 
-        val uiState = ProfileUiState.Editor(
+        val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
             data = User(),
+            settingsOpen = true,
             emailState = TextFieldState(),
             passwordState = TextFieldState(),
             submitEmailStatus = LoadingState.NotStarted,
@@ -342,14 +323,15 @@ class ProfileEditorScreenTest {
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileEditorScreen(
-                    uiState,
+                ProfileSettingsDialog(
+                    uiState = uiState,
+                    onClose = {},
                     onChangeEmail = {},
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = submit,
-                    onClose = {},
-                    onLogOut = {},
+                    maxWidthDp = 480.dp,
+                    windowSizeClass = WindowSizeClass.Compact
                 )
             }
         }
@@ -374,9 +356,10 @@ class ProfileEditorScreenTest {
         val submit = mockk<() -> Unit>()
         every { submit() } returns Unit
 
-        val uiState = ProfileUiState.Editor(
+        val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
             data = User(),
+            settingsOpen = true,
             emailState = TextFieldState(),
             passwordState = TextFieldState(),
             submitEmailStatus = LoadingState.NotStarted,
@@ -384,14 +367,15 @@ class ProfileEditorScreenTest {
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                ProfileEditorScreen(
-                    uiState,
+                ProfileSettingsDialog(
+                    uiState = uiState,
+                    onClose = {},
                     onChangeEmail = {},
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = submit,
-                    onClose = {},
-                    onLogOut = {},
+                    maxWidthDp = 480.dp,
+                    windowSizeClass = WindowSizeClass.Compact
                 )
             }
         }

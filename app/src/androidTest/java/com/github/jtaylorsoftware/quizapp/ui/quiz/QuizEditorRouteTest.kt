@@ -75,7 +75,7 @@ class QuizEditorRouteTest {
             )
         }
 
-        composeTestRule.onNodeWithContentDescription("Add question").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Add question").assertIsDisplayed()
     }
 
     @Test

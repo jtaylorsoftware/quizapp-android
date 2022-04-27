@@ -1,6 +1,5 @@
 package com.github.jtaylorsoftware.quizapp.ui.dashboard
 
-import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.SavedStateHandle
 import com.github.jtaylorsoftware.quizapp.data.domain.*
 import com.github.jtaylorsoftware.quizapp.data.domain.models.ObjectId
@@ -61,21 +60,6 @@ class QuizResultDetailViewModelTest {
     @After
     fun afterEach() {
         Dispatchers.resetMain()
-    }
-
-    @Test
-    fun `should begin with LoadingState NotStarted and NoProfile`() = runTest {
-        viewModel = QuizResultDetailViewModel(savedState, quizRepository, quizResultRepository)
-
-        assertThat(
-            viewModel.uiState,
-            IsInstanceOf(QuizResultDetailUiState.NoQuizResult::class.java)
-        )
-
-        assertThat(
-            viewModel.uiState.loading,
-            IsInstanceOf(LoadingState.NotStarted::class.java)
-        )
     }
 
     @Test

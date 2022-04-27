@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -33,35 +34,30 @@ import java.util.*
  *
  * Year button's `contentDescription` is `"Select year"`. Year items use [Text] with just the year value.
  *
- * @param defaultValue The default [LocalDate] to use.
+ * @param value The current [LocalDate] value
+ *
  * @param minYear The minimum year to offer as a selection. Defaults to current year.
+ *
  * @param maxYear The maximum year to offer as a selection. Defaults to current year + 10.
+ *
  * @param open Flag controlling visibility of the dialog.
- * @param onDismiss Callback invoked when the user clicks outside the dialog. Receives the current input
- *                  as its argument.
+ *
+ * @param onDismiss Callback invoked when the user clicks outside the dialog.
  */
 @Composable
 fun AppDatePicker(
-    defaultValue: LocalDate,
+    value: LocalDate,
+    onValueChange: (LocalDate) -> Unit,
     minYear: Int = Year.now().value,
     maxYear: Int = minYear + 10,
     open: Boolean,
-    onDismiss: (LocalDate) -> Unit,
+    onDismiss: () -> Unit,
 ) {
-    var localValue: LocalDate by remember {
-        mutableStateOf(
-            LocalDate.of(
-                defaultValue.year,
-                defaultValue.month,
-                defaultValue.dayOfMonth
-            )
-        )
-    }
     if (open) {
-        Dialog(onDismissRequest = { onDismiss(localValue) }) {
+        Dialog(onDismissRequest = onDismiss) {
             AppDatePickerContent(
-                value = defaultValue,
-                onDateChange = { localValue = it },
+                value = value,
+                onDateChange = onValueChange,
                 minYear = minYear,
                 maxYear = maxYear
             )
@@ -79,17 +75,12 @@ private fun AppDatePickerContent(
     minYear: Int,
     maxYear: Int,
 ) {
-    var month: Month by remember { mutableStateOf(value.month) }
-    var year: Int by remember { mutableStateOf(value.year) }
-    var day: Int by remember { mutableStateOf(value.dayOfMonth) }
-
-    fun adjustDate(newYear: Int = year, newMonth: Month = month, newDay: Int = day) {
+    fun adjustDate(newYear: Int = value.year, newMonth: Month = value.month, newDay: Int = value.dayOfMonth) {
         try {
             onDateChange(LocalDate.of(newYear, newMonth, newDay))
         } catch (ex: DateTimeException) {
-            // Day is not valid for the month, reset to safe value
-            day = 1
-            onDateChange(LocalDate.of(year, month, day))
+            // Day is not valid for the month, reset to safe value (first of month)
+            onDateChange(LocalDate.of(newYear, newMonth, 1))
         }
     }
 
@@ -112,22 +103,19 @@ private fun AppDatePickerContent(
                     .fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center
             ) {
-                MonthPicker(month, onMonthSelected = {
-                    month = it
+                MonthPicker(value.month, onMonthSelected = {
                     adjustDate(newMonth = it)
                 })
                 Spacer(Modifier.width(8.dp))
                 DayPicker(
-                    month = month,
-                    year = year,
-                    day = day,
+                    month = value.month,
+                    year = value.year,
+                    day = value.dayOfMonth,
                     onDaySelected = {
-                        day = it
                         adjustDate(newDay = it)
                     })
                 Spacer(Modifier.width(8.dp))
-                YearPicker(year = year, onYearSelected = {
-                    year = it
+                YearPicker(year = value.year, onYearSelected = {
                     adjustDate(newYear = it)
                 }, min = minYear, max = maxYear)
             }
@@ -157,7 +145,7 @@ private fun AppDatePickerContentPreview() {
  */
 @Composable
 private fun MonthPicker(month: Month, onMonthSelected: (Month) -> Unit) {
-    var expanded: Boolean by remember { mutableStateOf(false) }
+    var expanded: Boolean by rememberSaveable { mutableStateOf(false) }
     Column(
         modifier = Modifier.padding(horizontal = 0.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -201,7 +189,7 @@ private fun MonthPickerPreview() {
  */
 @Composable
 private fun DayPicker(month: Month, year: Int, day: Int, onDaySelected: (Int) -> Unit) {
-    var expanded: Boolean by remember { mutableStateOf(false) }
+    var expanded: Boolean by rememberSaveable { mutableStateOf(false) }
     val daysInMonth: Int by derivedStateOf {
         LocalDate.of(year, month.value, 1).lengthOfMonth()
     }
@@ -255,7 +243,7 @@ private fun YearPicker(
     max: Int = min + 10,
     onYearSelected: (Int) -> Unit
 ) {
-    var expanded: Boolean by remember { mutableStateOf(false) }
+    var expanded: Boolean by rememberSaveable { mutableStateOf(false) }
     Column(
         modifier = Modifier.padding(horizontal = 0.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally

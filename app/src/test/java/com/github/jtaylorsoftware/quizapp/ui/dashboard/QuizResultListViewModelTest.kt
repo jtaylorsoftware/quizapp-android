@@ -83,28 +83,6 @@ class QuizResultListViewModelTest {
     }
 
     @Test
-    fun `should begin with LoadingState NotStarted and NoProfile`() = runTest {
-        val savedState = SavedStateHandle()
-        val viewModel = QuizResultListViewModel(
-            savedState,
-            userRepository,
-            quizRepository,
-            quizResultRepository
-        )
-
-        // Should first be Loading, before initial refresh
-        assertThat(
-            viewModel.uiState,
-            IsInstanceOf(QuizResultListUiState.NoQuizResults::class.java)
-        )
-
-        assertThat(
-            viewModel.uiState.loading,
-            IsInstanceOf(LoadingState.NotStarted::class.java)
-        )
-    }
-
-    @Test
     fun `refresh should load results for current user, when nothing is set in SavedStateHandle`() =
         runTest {
             val savedState = SavedStateHandle()

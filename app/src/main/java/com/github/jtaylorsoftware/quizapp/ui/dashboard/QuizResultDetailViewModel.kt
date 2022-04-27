@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * [UiState] for a screen with a single [ResultDetail].
+ * [UiState] for a screen with a single [QuizResultDetailScreen].
  */
 sealed interface QuizResultDetailUiState : UiState {
     /**
@@ -89,6 +89,10 @@ class QuizResultDetailViewModel @Inject constructor(
 
     override val uiState by derivedStateOf { QuizResultDetailUiState.fromViewModelState(state) }
 
+    init {
+        refresh()
+    }
+
     /**
      * Refreshes the stored [QuizResult] data.
      *
@@ -117,7 +121,10 @@ class QuizResultDetailViewModel @Inject constructor(
             }
 
             nextState =
-                handleLoadQuizResult(nextState, quizResultRepository.getForQuizByUser(quizId, userId))
+                handleLoadQuizResult(
+                    nextState,
+                    quizResultRepository.getForQuizByUser(quizId, userId)
+                )
             if (nextState.loading is LoadingState.Error) {
                 state = nextState
                 cancel()

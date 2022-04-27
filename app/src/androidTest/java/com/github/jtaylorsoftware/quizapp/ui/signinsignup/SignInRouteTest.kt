@@ -1,4 +1,4 @@
-package com.github.jtaylorsoftware.quizapp.ui.login
+package com.github.jtaylorsoftware.quizapp.ui.signinsignup
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -9,20 +9,20 @@ import com.github.jtaylorsoftware.quizapp.ui.theme.QuizAppTheme
 import org.junit.Rule
 import org.junit.Test
 
-class LoginRouteTest {
+class SignInRouteTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
     @Test
     fun showsLoginForm() {
-        val uiState = LoginUiState(
+        val uiState = SignInUiState(
             loginStatus = LoadingState.NotStarted,
             usernameState = TextFieldState(),
             passwordState = TextFieldState()
         )
         composeTestRule.setContent {
             QuizAppTheme {
-                LoginRoute(
+                SignInRoute(
                     uiState = uiState,
                     onUsernameChanged = {},
                     onPasswordChanged = {},

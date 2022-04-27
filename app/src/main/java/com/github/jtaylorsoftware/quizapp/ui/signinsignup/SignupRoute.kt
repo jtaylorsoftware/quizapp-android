@@ -1,8 +1,14 @@
-package com.github.jtaylorsoftware.quizapp.ui.signup
+package com.github.jtaylorsoftware.quizapp.ui.signinsignup
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.ScaffoldState
 import androidx.compose.material.rememberScaffoldState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import com.github.jtaylorsoftware.quizapp.ui.components.AppScaffold
 
 /**
@@ -15,6 +21,7 @@ import com.github.jtaylorsoftware.quizapp.ui.components.AppScaffold
 fun SignupRoute(
     viewModel: SignupViewModel,
     navigateToLogin: () -> Unit,
+    scaffoldState: ScaffoldState,
 ) {
     SignupRoute(
         uiState = viewModel.uiState,
@@ -22,7 +29,8 @@ fun SignupRoute(
         onEmailChanged = viewModel::setEmail,
         onPasswordChanged = viewModel::setPassword,
         register = viewModel::register,
-        navigateToLogin = navigateToLogin
+        navigateToLogin = navigateToLogin,
+        scaffoldState = scaffoldState,
     )
 }
 
@@ -36,14 +44,22 @@ fun SignupRoute(
     navigateToLogin: () -> Unit,
     scaffoldState: ScaffoldState = rememberScaffoldState()
 ) {
-    AppScaffold(scaffoldState = scaffoldState, uiState = uiState) {
-        SignupScreen(
-            uiState = uiState,
-            onUsernameChanged = onUsernameChanged,
-            onPasswordChanged = onPasswordChanged,
-            onEmailChanged = onEmailChanged,
-            navigateToLogin = navigateToLogin,
-            register = register
-        )
+    AppScaffold(scaffoldState = scaffoldState) { paddingValues ->
+        Row(
+            Modifier
+                .padding(paddingValues)
+                .fillMaxSize(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SignupScreen(
+                uiState = uiState,
+                onUsernameChanged = onUsernameChanged,
+                onPasswordChanged = onPasswordChanged,
+                onEmailChanged = onEmailChanged,
+                navigateToLogin = navigateToLogin,
+                register = register
+            )
+        }
     }
 }

@@ -27,3 +27,25 @@ sealed interface FormResponseState {
         fun changeAnswer(text: String)
     }
 }
+
+/**
+ * [FormResponseState.FillIn] state suitable for previews.
+ */
+data class PreviewFillInFormState(
+    override val data: QuestionResponse,
+    override val error: String?,
+    override val answer: TextFieldState
+) : FormResponseState.FillIn {
+    override fun changeAnswer(text: String) {
+        TODO("Not yet implemented")
+    }
+}
+
+/**
+ * [FormResponseState.MultipleChoice] state suitable for previews.
+ */
+data class PreviewMultipleChoiceFormState(
+    override val data: QuestionResponse,
+    override val error: String?,
+    override var choice: Int
+) : FormResponseState.MultipleChoice

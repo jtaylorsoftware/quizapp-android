@@ -23,23 +23,24 @@ class ProfileRouteTest {
     fun displaysProfileScreen_whenUiStateIsProfile() {
         val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
-            data = User(username = "TEST")
+            data = User(username = "TEST"),
+            settingsOpen = false,
         )
         composeTestRule.setContent {
             QuizAppTheme {
                 ProfileRoute(
-                    uiState,
+                    uiState = uiState,
                     isRefreshing = false,
                     onRefresh = {},
                     onChangeEmail = {},
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = {},
-                    navigateToQuizScreen = {},
-                    navigateToResultScreen = {},
-                    openEditor = {},
-                    closeEditor = {},
-                    onLogOut = {},
+                    navigateToQuizCreator = {},
+                    navigateToQuizResults = {},
+                    openSettings = {},
+                    closeSettings = {},
+                    onLogOut = {}
                 )
             }
         }
@@ -48,10 +49,11 @@ class ProfileRouteTest {
     }
 
     @Test
-    fun displaysEditorScreen_whenUiStateIsEditor() {
-        val uiState = ProfileUiState.Editor(
+    fun displaysSettings_whenUiStateSettingsOpen() {
+        val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
             data = User(email = "TESTEMAIL"),
+            settingsOpen = true,
             emailState = TextFieldState(text = "TESTEMAIL"),
             passwordState = TextFieldState(),
             submitEmailStatus = LoadingState.NotStarted,
@@ -60,98 +62,24 @@ class ProfileRouteTest {
         composeTestRule.setContent {
             QuizAppTheme {
                 ProfileRoute(
-                    uiState,
+                    uiState = uiState,
                     isRefreshing = false,
                     onRefresh = {},
                     onChangeEmail = {},
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = {},
-                    navigateToQuizScreen = {},
-                    navigateToResultScreen = {},
-                    openEditor = {},
-                    closeEditor = {},
-                    onLogOut = {},
+                    navigateToQuizCreator = {},
+                    navigateToQuizResults = {},
+                    openSettings = {},
+                    closeSettings = {},
+                    onLogOut = {}
                 )
             }
         }
 
         composeTestRule.onNodeWithText(uiState.data.email, substring = true).assertIsDisplayed()
         composeTestRule.onNodeWithText("Change Email").assertIsDisplayed()
-    }
-
-    @Test
-    fun callsOnRefresh_whenSubmitEmailStatusIsSuccess() {
-        val uiState = ProfileUiState.Editor(
-            loading = LoadingState.NotStarted,
-            data = User(email = "TESTEMAIL"),
-            emailState = TextFieldState(text = "TESTEMAIL"),
-            passwordState = TextFieldState(),
-            submitEmailStatus = LoadingState.Success(),
-            submitPasswordStatus = LoadingState.NotStarted
-        )
-        val onRefresh = mockk<() -> Unit>()
-        justRun { onRefresh() }
-        composeTestRule.setContent {
-            QuizAppTheme {
-                ProfileRoute(
-                    uiState,
-                    isRefreshing = false,
-                    onRefresh = onRefresh,
-                    onChangeEmail = {},
-                    onChangePassword = {},
-                    onSubmitEmail = {},
-                    onSubmitPassword = {},
-                    navigateToQuizScreen = {},
-                    navigateToResultScreen = {},
-                    openEditor = {},
-                    closeEditor = {},
-                    onLogOut = {},
-                )
-            }
-        }
-
-        verify(exactly = 1) {
-            onRefresh()
-        }
-        confirmVerified(onRefresh)
-    }
-
-    @Test
-    fun callsOnRefresh_whenSubmitPasswordStatusIsSuccess() {
-        val uiState = ProfileUiState.Editor(
-            loading = LoadingState.NotStarted,
-            data = User(email = "TESTEMAIL"),
-            emailState = TextFieldState(text = "TESTEMAIL"),
-            passwordState = TextFieldState(),
-            submitEmailStatus = LoadingState.NotStarted,
-            submitPasswordStatus = LoadingState.Success(),
-        )
-        val onRefresh = mockk<() -> Unit>()
-        justRun { onRefresh() }
-        composeTestRule.setContent {
-            QuizAppTheme {
-                ProfileRoute(
-                    uiState,
-                    isRefreshing = false,
-                    onRefresh = onRefresh,
-                    onChangeEmail = {},
-                    onChangePassword = {},
-                    onSubmitEmail = {},
-                    onSubmitPassword = {},
-                    navigateToQuizScreen = {},
-                    navigateToResultScreen = {},
-                    openEditor = {},
-                    closeEditor = {},
-                    onLogOut = {},
-                )
-            }
-        }
-
-        verify(exactly = 1) {
-            onRefresh()
-        }
-        confirmVerified(onRefresh)
     }
 
     @Test
@@ -162,18 +90,18 @@ class ProfileRouteTest {
         composeTestRule.setContent {
             QuizAppTheme {
                 ProfileRoute(
-                    uiState,
+                    uiState = uiState,
                     isRefreshing = false,
                     onRefresh = {},
                     onChangeEmail = {},
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = {},
-                    navigateToQuizScreen = {},
-                    navigateToResultScreen = {},
-                    openEditor = {},
-                    closeEditor = {},
-                    onLogOut = {},
+                    navigateToQuizCreator = {},
+                    navigateToQuizResults = {},
+                    openSettings = {},
+                    closeSettings = {},
+                    onLogOut = {}
                 )
             }
         }
@@ -189,31 +117,31 @@ class ProfileRouteTest {
         composeTestRule.setContent {
             QuizAppTheme {
                 ProfileRoute(
-                    uiState,
+                    uiState = uiState,
                     isRefreshing = false,
                     onRefresh = {},
                     onChangeEmail = {},
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = {},
-                    navigateToQuizScreen = {},
-                    navigateToResultScreen = {},
-                    openEditor = {},
-                    closeEditor = {},
-                    onLogOut = {},
+                    navigateToQuizCreator = {},
+                    navigateToQuizResults = {},
+                    openSettings = {},
+                    closeSettings = {},
+                    onLogOut = {}
                 )
             }
         }
 
-        composeTestRule.onAllNodesWithText(FailureReason.UNKNOWN.value, substring = true)
-            .assertCountEquals(2)
+        composeTestRule.onNodeWithText(FailureReason.UNKNOWN.value, substring = true).assertIsDisplayed()
     }
 
     @Test
     fun displaysBottomNavigation_whenUiStateIsProfile() {
         val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
-            data = User(username = "TEST")
+            data = User(username = "TEST"),
+            settingsOpen = false,
         )
         composeTestRule.setContent {
             QuizAppTheme {
@@ -225,10 +153,10 @@ class ProfileRouteTest {
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = {},
-                    navigateToQuizScreen = {},
-                    navigateToResultScreen = {},
-                    openEditor = {},
-                    closeEditor = {},
+                    navigateToQuizCreator = {},
+                    navigateToQuizResults = {},
+                    openSettings = {},
+                    closeSettings = {},
                     onLogOut = {},
                     bottomNavigation = { Text("BottomNavigation") }
                 )
@@ -239,10 +167,11 @@ class ProfileRouteTest {
     }
 
     @Test
-    fun doesNotDisplayBottomNavigation_whenUiStateIsEditor() {
-        val uiState = ProfileUiState.Editor(
+    fun doesNotDisplayBottomNavigation_whenUiStateIsSettings() {
+        val uiState = ProfileUiState.Profile(
             loading = LoadingState.NotStarted,
             data = User(),
+            settingsOpen = true,
             emailState = TextFieldState(),
             passwordState = TextFieldState(),
             submitEmailStatus = LoadingState.NotStarted,
@@ -258,15 +187,54 @@ class ProfileRouteTest {
                     onChangePassword = {},
                     onSubmitEmail = {},
                     onSubmitPassword = {},
-                    navigateToQuizScreen = {},
-                    navigateToResultScreen = {},
-                    openEditor = {},
-                    closeEditor = {},
+                    navigateToQuizCreator = {},
+                    navigateToQuizResults = {},
+                    openSettings = {},
+                    closeSettings = {},
                     onLogOut = {},
                 )
             }
         }
 
         composeTestRule.onNodeWithTag("AppBottomNavigationBar").assertDoesNotExist()
+    }
+
+    @Test
+    fun logOutButton_whenClicked_callsLogOut() {
+        val uiState = ProfileUiState.Profile(
+            loading = LoadingState.NotStarted,
+            data = User(),
+            settingsOpen = false,
+        )
+        val logOut = mockk<()->Unit>()
+        justRun { logOut() }
+
+        composeTestRule.setContent {
+            QuizAppTheme {
+                ProfileRoute(
+                    uiState,
+                    isRefreshing = false,
+                    onRefresh = {},
+                    onChangeEmail = {},
+                    onChangePassword = {},
+                    onSubmitEmail = {},
+                    onSubmitPassword = {},
+                    navigateToQuizCreator = {},
+                    navigateToQuizResults = {},
+                    openSettings = {},
+                    closeSettings = {},
+                    onLogOut = logOut,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Log out").performClick()
+        composeTestRule.onNodeWithText("Confirm").performClick()
+
+
+        verify(exactly = 1){
+            logOut()
+        }
+        confirmVerified(logOut)
     }
 }
