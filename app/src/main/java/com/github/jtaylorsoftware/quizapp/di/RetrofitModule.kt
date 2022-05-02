@@ -33,7 +33,7 @@ object RetrofitModule {
         moshi: Moshi,
     ): Retrofit = Retrofit.Builder()
         .client(createHttpClient(userCache, authenticationEventProducer))
-        .baseUrl("http://www.makequizzes.online/api/v2/")
+        .baseUrl("https://api.makequizzes.online/api/v2/")
         .addCallAdapterFactory(NetworkResultAdapterFactory())
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()
